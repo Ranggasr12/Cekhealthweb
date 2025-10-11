@@ -166,7 +166,7 @@ export default function NewsPage() {
     };
 
     fetchNews();
-  }, []);
+  }, [healthNews]); // ✅ PERBAIKAN: Tambahkan healthNews ke dependency array
 
   const filteredNews = news.filter(item => {
     const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -405,7 +405,7 @@ export default function NewsPage() {
             {filteredNews.length === 0 && (
               <Box textAlign="center" py={10}>
                 <Text fontSize="xl" color="gray.500">
-                  Tidak ada berita yang ditemukan untuk pencarian "{searchTerm}"
+                  Tidak ada berita yang ditemukan untuk pencarian &quot;{searchTerm}&quot;
                 </Text>
               </Box>
             )}
