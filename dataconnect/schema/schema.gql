@@ -1,0 +1,51 @@
+type User @table {
+  displayName: String!
+  createdAt: Timestamp!
+  email: String
+  photoUrl: String
+  lastLogin: Timestamp
+}
+
+type Article @table {
+  title: String!
+  content: String!
+  publishedDate: Date!
+  author: String!
+  tags: [String]
+  imageUrl: String
+  source: String
+}
+
+type Video @table {
+  title: String!
+  url: String!
+  duration: Int!
+  publishedDate: Date!
+  speaker: String!
+  description: String
+  tags: [String]
+  thumbnailUrl: String
+}
+
+type Magazine @table {
+  title: String!
+  issueNumber: Int!
+  publicationDate: Date!
+  coverImageUrl: String
+  description: String
+}
+
+type UserContentInteraction @table {
+  user: User!
+  article: Article
+  video: Video
+  interactionType: String!
+  timestamp: Timestamp!
+}
+
+type SubscriptionType @table {
+  user: User!
+  magazine: Magazine
+  subscribedAt: Timestamp!
+  topic: String
+}

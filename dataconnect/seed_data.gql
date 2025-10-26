@@ -1,0 +1,116 @@
+mutation CreateSeedData @transaction @auth(level: PUBLIC, insecureReason: "This operation is only used to populate the database with seed data.") {
+  user_insertMany(data: [
+    {
+      id: "67798edc-8c01-4b69-b34a-492915787064",
+      createdAt: "2024-03-01T12:00:00Z",
+      displayName: "John Doe",
+      email: "john.doe@example.com",
+      lastLogin: "2024-03-15T10:00:00Z",
+      photoUrl: "https://example.com/john.jpg"
+    },
+    {
+      id: "38673b33-2e8f-4479-af27-a9243f97e6a3",
+      createdAt: "2024-02-15T08:00:00Z",
+      displayName: "Jane Smith",
+      email: "jane.smith@example.com",
+      lastLogin: "2024-03-10T14:00:00Z",
+      photoUrl: "https://example.com/jane.jpg"
+    }
+  ])
+  magazine_insertMany(data: [
+    {
+      id: "9a3c4a94-6f2e-47a3-b59a-a4671983d8a8",
+      coverImageUrl: "https://example.com/magazine1.jpg",
+      description: "A magazine about technology",
+      issueNumber: 101,
+      publicationDate: "2024-03-01",
+      title: "Tech Today"
+    },
+    {
+      id: "21e3c9d6-9e6a-4a54-b8e7-e8b5a2c3d9d9",
+      coverImageUrl: "https://example.com/magazine2.jpg",
+      description: "A magazine about health and fitness",
+      issueNumber: 55,
+      publicationDate: "2024-02-15",
+      title: "Healthy Living"
+    }
+  ])
+  article_insertMany(data: [
+    {
+      id: "b67a0a26-4c78-4d8c-896a-34d96fd28861",
+      author: "Alice Johnson",
+      content: "The latest advancements in AI",
+      imageUrl: "https://example.com/article1.jpg",
+      publishedDate: "2024-03-10",
+      source: "Tech News",
+      tags: ["AI", "Technology"],
+      title: "AI Revolution"
+    },
+    {
+      id: "f5c8a876-0e7e-4a9b-a65c-e8e7b5a6c7d5",
+      author: "Bob Williams",
+      content: "Tips for a healthy lifestyle",
+      imageUrl: "https://example.com/article2.jpg",
+      publishedDate: "2024-02-28",
+      source: "Health Magazine",
+      tags: ["Health", "Fitness"],
+      title: "Stay Healthy"
+    }
+  ])
+   video_insertMany(data: [
+    {
+      id: "1d2a3b4c-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+      description: "Learn about web development",
+      duration: 3600,
+      publishedDate: "2024-03-05",
+      speaker: "Charlie Brown",
+      tags: ["Web Development", "Coding"],
+      thumbnailUrl: "https://example.com/video1.jpg",
+      title: "Web Dev 101",
+      url: "https://example.com/video1.mp4"
+    },
+    {
+      id: "9e8d7c6b-5a4f-3e2d-1c9b-8a7f6e5d4c3b",
+      description: "Yoga for beginners",
+      duration: 1800,
+      publishedDate: "2024-02-20",
+      speaker: "Diana Green",
+      tags: ["Yoga", "Fitness"],
+      thumbnailUrl: "https://example.com/video2.jpg",
+      title: "Yoga Basics",
+      url: "https://example.com/video2.mp4"
+    }
+  ])
+  subscriptionType_insertMany(data: [
+    {
+      id: "e4f3d2c1-b8a7-4c2e-9d1a-6b9a8f7e3d2c",
+      userId: "67798edc-8c01-4b69-b34a-492915787064",
+      magazineId: "9a3c4a94-6f2e-47a3-b59a-a4671983d8a8",
+      subscribedAt: "2024-03-10T09:00:00Z",
+      topic: "Technology"
+    },
+    {
+      id: "c2b0a987-6d4e-4e7e-8b7d-5a9c8e7d6b5a",
+      userId: "38673b33-2e8f-4479-af27-a9243f97e6a3",
+      magazineId: "21e3c9d6-9e6a-4a54-b8e7-e8b5a2c3d9d9",
+      subscribedAt: "2024-02-28T16:00:00Z",
+      topic: "Health"
+    }
+  ])
+  userContentInteraction_insertMany(data: [
+    {
+      id: "a7b6c5d4-3e2f-4a1b-9d8c-7e6d5c4b3a2f",
+      userId: "67798edc-8c01-4b69-b34a-492915787064",
+      articleId: "b67a0a26-4c78-4d8c-896a-34d96fd28861",
+      interactionType: "view",
+      timestamp: "2024-03-15T11:00:00Z"
+    },
+    {
+      id: "8d7e6f5a-2c1b-4e3d-9a4c-6b3a5f2e1d9c",
+      userId: "38673b33-2e8f-4479-af27-a9243f97e6a3",
+      videoId: "9e8d7c6b-5a4f-3e2d-1c9b-8a7f6e5d4c3b",
+      interactionType: "like",
+      timestamp: "2024-03-10T15:00:00Z"
+    }
+  ])
+}

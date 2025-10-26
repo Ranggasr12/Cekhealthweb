@@ -6,6 +6,7 @@ import {
   Image,
   HStack,
   Link,
+  Button,
   useColorModeValue,
   IconButton,
   Drawer,
@@ -15,16 +16,21 @@ import {
   DrawerContent,
   VStack,
   useDisclosure,
+  Spinner
 } from "@chakra-ui/react";
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { HamburgerIcon } from '@chakra-ui/icons';
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const activeColor = useColorModeValue("purple.600", "purple.300");
-  const inactiveColor = useColorModeValue("gray.700", "gray.300");
-  const hoverColor = useColorModeValue("purple.500", "purple.200");
+
+  const [user, setUser] = useState(null);
+  const [role, setRole] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   const navItems = [
     { href: "/", label: "Home" },
@@ -35,11 +41,31 @@ export default function Navbar() {
     { href: "/contact", label: "Contact" },
   ];
 
-  const isActive = (href) => {
-    if (href === "/") {
-      return pathname === "/";
+  const isActive = (href) => pathname === href;
+
+  useEffect(() => {
+    async function loadUser() {
+      const { data } = await supabase.auth.getUser();
+      if (data?.user) {
+        setUser(data.user);
+
+        // Ambil role di tabel profiles
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", data.user.id)
+          .single();
+
+        setRole(profile?.role || "user");
+      }
+      setLoading(false);
     }
-    return pathname.startsWith(href);
+    loadUser();
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push("/login");
   };
 
   return (
@@ -54,120 +80,88 @@ export default function Navbar() {
         position="sticky"
         top={0}
         zIndex={1000}
-        boxShadow="0 2px 10px -2px rgba(0, 0, 0, 0.05), 0 1px 5px -1px rgba(0, 0, 0, 0.03)"
-        _after={{
-          content: '""',
-          position: "absolute",
-          bottom: "0",
-          left: "0",
-          width: "100%",
-          height: "1px",
-          background: "linear-gradient(90deg, transparent 0%, rgba(128, 90, 213, 0.1) 20%, rgba(128, 90, 213, 0.2) 50%, rgba(128, 90, 213, 0.1) 80%, transparent 100%)"
-        }}
+        boxShadow="md"
       >
         <Flex align="center">
           <Link href="/">
-            <Image
-              src="/images/Logo.svg"
-              alt="HealthCheck Logo"
-              width={{ base: "70px", md: "80px", lg: "90px" }}
-              height="auto"
-              objectFit="contain"
-              draggable="false"
-              cursor="pointer"
-              transition="all 0.3s ease"
-              _hover={{
-                transform: "scale(1.05)",
-                opacity: 0.9
-              }}
-              fallback={
-                <Heading size={{ base: "sm", md: "md" }} color="purple.600">
-                  HealthCheck
-                </Heading>
-              }
-            />
+            <Image src="/images/Logo.svg" width="90px" alt="Logo" />
           </Link>
         </Flex>
 
-        <HStack 
-          spacing={{ base: 4, md: 6, lg: 8 }} 
-          fontWeight="medium" 
-          color="gray.700"
-          display={{ base: "none", md: "flex" }}
-        >
+        {/* MENU DESKTOP */}
+        <HStack spacing={6} display={{ base: "none", md: "flex" }}>
           {navItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              color={isActive(item.href) ? activeColor : inactiveColor}
-              fontWeight={isActive(item.href) ? "semibold" : "medium"}
-              position="relative"
-              _hover={{
-                color: hoverColor,
-                textDecoration: "none",
-                transform: "translateY(-1px)"
-              }}
-              transition="all 0.2s ease"
-              fontSize={{ base: "sm", lg: "md" }}
-              {...(isActive(item.href) && {
-                _after: {
-                  content: '""',
-                  position: "absolute",
-                  bottom: "-8px",
-                  left: "0",
-                  width: "100%",
-                  height: "2px",
-                  backgroundColor: "purple.500",
-                  borderRadius: "full"
-                }
-              })}
+              color={isActive(item.href) ? "purple.600" : "gray.700"}
+              fontWeight={isActive(item.href) ? "bold" : "medium"}
             >
               {item.label}
             </Link>
           ))}
+
+          {/* AUTH BUTTONS */}
+          {loading ? (
+            <Spinner size="sm" />
+          ) : user ? (
+            <>
+              {role === "admin" && (
+                <Button colorScheme="purple" size="sm" onClick={() => router.push("/admin")}>
+                  Dashboard Admin
+                </Button>
+              )}
+              <Button size="sm" variant="outline" onClick={handleLogout}>
+                Logout
+              </Button>
+            </>
+          ) : (
+            <Button colorScheme="purple" size="sm" onClick={() => router.push("/login")}>
+              Login
+            </Button>
+          )}
         </HStack>
 
+        {/* MOBILE MENU BUTTON */}
         <IconButton
           display={{ base: "flex", md: "none" }}
           aria-label="Open menu"
           icon={<HamburgerIcon />}
-          variant="ghost"
-          color="gray.700"
           onClick={onOpen}
-          _hover={{ bg: "purple.50", color: "purple.600" }}
         />
       </Flex>
 
+      {/* DRAWER MOBILE MENU */}
       <Drawer isOpen={isOpen} placement="right" onClose={onClose}>
         <DrawerOverlay />
         <DrawerContent>
-          <DrawerHeader borderBottomWidth="1px">
-            <Flex align="center" justify="space-between">
-              <Heading size="md">Menu</Heading>
-            </Flex>
-          </DrawerHeader>
+          <DrawerHeader>Menu</DrawerHeader>
           <DrawerBody>
-            <VStack spacing={4} align="stretch" py={4}>
+            <VStack spacing={4} align="stretch">
               {navItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={onClose}
-                  color={isActive(item.href) ? activeColor : inactiveColor}
-                  fontWeight={isActive(item.href) ? "semibold" : "medium"}
-                  py={2}
-                  px={4}
-                  borderRadius="md"
-                  _hover={{
-                    bg: "purple.50",
-                    color: "purple.600",
-                    textDecoration: "none"
-                  }}
-                  transition="all 0.2s"
-                >
+                <Link key={item.href} href={item.href} onClick={onClose}>
                   {item.label}
                 </Link>
               ))}
+
+              {!loading && (
+                user ? (
+                  <>
+                    {role === "admin" && (
+                      <Button colorScheme="purple" onClick={() => router.push("/admin")}>
+                        Dashboard Admin
+                      </Button>
+                    )}
+                    <Button variant="outline" onClick={handleLogout}>
+                      Logout
+                    </Button>
+                  </>
+                ) : (
+                  <Button colorScheme="purple" onClick={() => router.push("/login")}>
+                    Login
+                  </Button>
+                )
+              )}
             </VStack>
           </DrawerBody>
         </DrawerContent>

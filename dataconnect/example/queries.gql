@@ -1,0 +1,26 @@
+mutation CreateUserContentInteraction($userId: UUID!, $articleId: UUID, $videoId: UUID, $interactionType: String!) @auth(level: USER) {
+  userContentInteraction_insert(data: {userId: $userId, articleId: $articleId, videoId: $videoId, interactionType: $interactionType, timestamp_expr: "request.time"})
+}
+
+query ListArticlesByAuthor($author: String!) @auth(level: PUBLIC, insecureReason: "This operation is safe to expose to the public") {
+  articles(where: {author: {eq: $author}}) {
+    id
+    title
+    content
+    publishedDate
+  }
+}
+
+mutation SubscribeToMagazine($magazineId: UUID!, $topic: String) @auth(level: USER) {
+  subscriptionType_insert(data: {magazineId: $magazineId, userId_expr: "auth.uid", subscribedAt_expr: "request.time", topic: $topic})
+}
+
+query ListVideosByTag($tag: String!) @auth(level: PUBLIC, insecureReason: "This operation is safe to expose to the public") {
+  videos(where: {tags: {includes: $tag}}) {
+    id
+    title
+    description
+    speaker
+    publishedDate
+  }
+}
