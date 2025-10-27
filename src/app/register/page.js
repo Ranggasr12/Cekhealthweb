@@ -3,108 +3,131 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import {
-  Box, Input, Button, Heading, VStack, FormControl, FormLabel, useToast
+  Box, Container, Heading, FormControl, FormLabel, Input,
+  Button, VStack, Text, useToast
 } from "@chakra-ui/react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function RegisterPage() {
+  const router = useRouter();
   const toast = useToast();
   const [loading, setLoading] = useState(false);
-
   const [form, setForm] = useState({
-    nama: "",
-    nomor_hp: "",
-    alamat: "",
     email: "",
     password: "",
+    confirmPassword: ""
   });
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const handleRegister = async () => {
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    
+    if (form.password !== form.confirmPassword) {
+      toast({
+        title: "Error",
+        description: "Password tidak cocok",
+        status: "error",
+        duration: 4000,
+      });
+      return;
+    }
+
     setLoading(true);
 
-    // Cek email sudah terdaftar
-    const { data: existing } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("email", form.email)
-      .single();
+    try {
+      // 1. Sign up the user
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: form.email.trim().toLowerCase(),
+        password: form.password,
+      });
 
-    if (existing) {
-      toast({ title: "Akun sudah ada", status: "error" });
-      setLoading(false);
-      return;
-    }
+      if (authError) throw authError;
 
-    const { data, error } = await supabase.auth.signUp({
-      email: form.email,
-      password: form.password,
-      options: {
-        data: { role: "user" } // default user
+      if (authData.user) {
+        toast({
+          title: "Registrasi berhasil!",
+          description: "Silakan login dengan akun Anda",
+          status: "success",
+          duration: 4000,
+        });
+        
+        // Redirect to login page
+        router.push("/login");
       }
-    });
 
-    if (error) {
-      toast({ title: error.message, status: "error" });
+    } catch (error) {
+      console.error("Registration error:", error);
+      toast({
+        title: "Registrasi gagal",
+        description: error.message,
+        status: "error",
+        duration: 4000,
+      });
+    } finally {
       setLoading(false);
-      return;
     }
-
-    // Simpan data ke tabel profiles
-    await supabase.from("profiles").insert([
-      {
-        id: data.user.id,
-        nama: form.nama,
-        nomor_hp: form.nomor_hp,
-        alamat: form.alamat,
-      }
-    ]);
-
-    toast({ title: "Register berhasil. Silakan login.", status: "success" });
-    setLoading(false);
   };
 
   return (
-    <Box maxW="md" mx="auto" mt={12} p={6} borderWidth="1px" borderRadius="lg">
-      <Heading mb={6} textAlign="center">Register</Heading>
+    <Container maxW="md" py={12}>
+      <Box p={8} borderWidth={1} borderRadius="lg" boxShadow="lg" bg="white">
+        <Heading mb={6} textAlign="center" color="purple.600">
+          Daftar Akun
+        </Heading>
 
-      <VStack spacing={4}>
-        <FormControl>
-          <FormLabel>Nama</FormLabel>
-          <Input name="nama" onChange={handleChange} />
-        </FormControl>
+        <form onSubmit={handleRegister}>
+          <VStack spacing={4}>
+            <FormControl isRequired>
+              <FormLabel>Email</FormLabel>
+              <Input 
+                name="email" 
+                type="email" 
+                value={form.email} 
+                onChange={handleChange}
+                placeholder="email@example.com"
+              />
+            </FormControl>
 
-        <FormControl>
-          <FormLabel>Nomor HP</FormLabel>
-          <Input name="nomor_hp" onChange={handleChange} />
-        </FormControl>
+            <FormControl isRequired>
+              <FormLabel>Password</FormLabel>
+              <Input 
+                name="password" 
+                type="password" 
+                value={form.password} 
+                onChange={handleChange}
+                placeholder="Minimal 6 karakter"
+                minLength={6}
+              />
+            </FormControl>
 
-        <FormControl>
-          <FormLabel>Alamat</FormLabel>
-          <Input name="alamat" onChange={handleChange} />
-        </FormControl>
+            <FormControl isRequired>
+              <FormLabel>Konfirmasi Password</FormLabel>
+              <Input 
+                name="confirmPassword" 
+                type="password" 
+                value={form.confirmPassword} 
+                onChange={handleChange}
+                placeholder="Ulangi password"
+              />
+            </FormControl>
 
-        <FormControl>
-          <FormLabel>Email</FormLabel>
-          <Input type="email" name="email" onChange={handleChange} />
-        </FormControl>
+            <Button type="submit" colorScheme="purple" width="full" isLoading={loading}>
+              Daftar
+            </Button>
+          </VStack>
+        </form>
 
-        <FormControl>
-          <FormLabel>Password</FormLabel>
-          <Input type="password" name="password" onChange={handleChange} />
-        </FormControl>
-
-        <Button
-          w="full"
-          colorScheme="purple"
-          isLoading={loading}
-          onClick={handleRegister}
-        >
-          Register
-        </Button>
-      </VStack>
-    </Box>
+        <Text mt={4} textAlign="center">
+          Sudah punya akun?{" "}
+          <Link href="/login" style={{ color: "purple", fontWeight: "bold" }}>
+            Login di sini
+          </Link>
+        </Text>
+      </Box>
+    </Container>
   );
 }

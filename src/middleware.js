@@ -3,40 +3,44 @@ import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs";
 
 export async function middleware(req) {
   const res = NextResponse.next();
-
-  // Ambil session dari cookie
   const supabase = createMiddlewareClient({ req, res });
+
+  // Ambil session user
   const {
     data: { session },
   } = await supabase.auth.getSession();
 
-  // Jika tidak ada session → redirect ke login
+  // Kalau tidak login → redirect ke /login
   if (!session) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
 
-  // Ambil role dari profiles
-  const { data: profile } = await supabase
+  const userId = session.user.id;
+
+  // Ambil role user dari tabel `profiles`
+  const { data: profile, error } = await supabase
     .from("profiles")
     .select("role")
-    .eq("id", session.user.id)
+    .eq("id", userId)
     .single();
 
-  // Jika role tidak ditemukan → default guest
-  const role = profile?.role ?? "guest";
+  if (!profile || error) {
+    return NextResponse.redirect(new URL("/login", req.url));
+  }
 
-  // Proteksi route berdasarkan role
+  const role = profile.role;
+
   const pathname = req.nextUrl.pathname;
 
-  // Jika user bukan admin tapi akses /admin → tolak
+  // Jika berusaha masuk ke /admin tapi role bukan admin → alihkan ke dashboard
   if (pathname.startsWith("/admin") && role !== "admin") {
-    return NextResponse.redirect(new URL("/unauthorized", req.url));
+    return NextResponse.redirect(new URL("/dashboard", req.url));
   }
 
   return res;
 }
 
-// Tentukan middleware berjalan dimana saja
+// Tentukan hal yang mau dilindungi
 export const config = {
-  matcher: ["/admin/:path*", "/dashboard/:path*"],
+  matcher: ["/admin/:path*", "/dashboard/:path*"], // tambahkan path sesuai kebutuhan
 };

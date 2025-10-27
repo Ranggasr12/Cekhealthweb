@@ -27,24 +27,64 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      console.log("🔄 Starting login process...");
+      
+      // 1. Sign in user
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: form.email,
+        email: form.email.trim().toLowerCase(),
         password: form.password,
       });
 
-      if (authError) throw authError;
+      if (authError) {
+        console.error("❌ Auth error:", authError);
+        throw authError;
+      }
 
-      const user = authData?.user;
-      if (!user) throw new Error("User not found");
+      const user = authData.user;
+      console.log("✅ Login successful, user ID:", user.id);
+      console.log("📧 User email:", user.email);
 
-    const userId = authData.user?.id; 
+      // 2. Check user role from profiles table
+      console.log("🔄 Checking user profile...");
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role, full_name')
+        .eq('id', user.id)
+        .single();
 
-const { data: profile, error: profileError } = await supabase
-  .from('profiles')
-  .select('role')
-  .eq('id', userId)
-  .single();
+      console.log("📊 Profile response:", { profile, profileError });
 
+      let userRole = 'user'; // Default role
+
+      if (profileError) {
+        if (profileError.code === 'PGRST116') {
+          console.log("ℹ️ Profile doesn't exist, creating default profile...");
+          
+          // Create default profile
+          const { error: createError } = await supabase
+            .from('profiles')
+            .insert([
+              {
+                id: user.id,
+                full_name: user.email?.split('@')[0] || 'User',
+                role: 'user'
+              }
+            ]);
+
+          if (createError) {
+            console.error("❌ Error creating profile:", createError);
+          } else {
+            console.log("✅ Default profile created");
+          }
+        } else {
+          console.error("❌ Other profile error:", profileError);
+        }
+      } else if (profile) {
+        userRole = profile.role || 'user';
+        console.log("🎯 User role found:", userRole);
+      }
+
+      console.log("🎯 Final user role before redirect:", userRole);
 
       toast({
         title: "Login berhasil!",
@@ -52,13 +92,17 @@ const { data: profile, error: profileError } = await supabase
         duration: 2000,
       });
 
-      if (profile.role === "admin") {
+      // 3. Redirect based on role
+      if (userRole === 'admin') {
+        console.log("🔄 Redirecting to ADMIN dashboard...");
         router.push("/admin");
       } else {
+        console.log("🔄 Redirecting to USER dashboard...");
         router.push("/");
       }
 
     } catch (error) {
+      console.error("❌ Login failed:", error);
       toast({
         title: "Login gagal",
         description: error.message,
@@ -81,12 +125,24 @@ const { data: profile, error: profileError } = await supabase
           <VStack spacing={4}>
             <FormControl isRequired>
               <FormLabel>Email</FormLabel>
-              <Input name="email" type="email" value={form.email} onChange={handleChange} />
+              <Input 
+                name="email" 
+                type="email" 
+                value={form.email} 
+                onChange={handleChange}
+                placeholder="ranggaputra1221@gmail.com"
+              />
             </FormControl>
 
             <FormControl isRequired>
               <FormLabel>Password</FormLabel>
-              <Input name="password" type="password" value={form.password} onChange={handleChange} />
+              <Input 
+                name="password" 
+                type="password" 
+                value={form.password} 
+                onChange={handleChange}
+                placeholder="••••••••"
+              />
             </FormControl>
 
             <Button type="submit" colorScheme="purple" width="full" isLoading={loading}>

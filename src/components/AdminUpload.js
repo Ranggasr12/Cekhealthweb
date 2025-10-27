@@ -1,9 +1,6 @@
 // src/components/AdminUpload.jsx
 import { useState } from "react";
-import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { storage, db } from "@/lib/firebase";
-import useUser from "@/lib/useUser";
+import useUser from "@/lib/useuser";
 
 export default function AdminUpload() {
   const { user } = useUser();

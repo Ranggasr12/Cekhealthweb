@@ -166,7 +166,7 @@ export default function NewsPage() {
     };
 
     fetchNews();
-  }, [healthNews]); // ✅ PERBAIKAN: Tambahkan healthNews ke dependency array
+  }, [healthNews]); 
 
   const filteredNews = news.filter(item => {
     const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||

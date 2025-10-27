@@ -1,4 +1,4 @@
-// pages/api/auth/login.js atau app/api/auth/route.js
+
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
