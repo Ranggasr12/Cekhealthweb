@@ -1,5 +1,5 @@
 // src/utils/checkAdmin.js
-import { supabase } from "@/lib/supabaseClient";
+import { supabase } from "@/lib/supabase";
 
 export async function ensureAdmin() {
   const { data: { user } } = await supabase.auth.getUser();

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Box, Heading, Button, Table, Thead, Tbody, Tr, Th, Td, Spinner } from "@chakra-ui/react";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 
 export default function QuestionsPage() {

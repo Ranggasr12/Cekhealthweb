@@ -21,7 +21,7 @@ import {
 import { usePathname, useRouter } from 'next/navigation';
 import { HamburgerIcon } from '@chakra-ui/icons';
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase } from "@/lib/supabase";
 
 export default function Navbar() {
   const pathname = usePathname();
