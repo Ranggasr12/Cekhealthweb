@@ -1,9 +1,16 @@
 "use client";
-import { Box, Flex, VStack, Text, IconButton, Link } from "@chakra-ui/react";
+
+import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabaseClient';
+import { useRouter } from 'next/navigation';
+import { Box, Flex, VStack, Text, Link, Button, Spinner } from "@chakra-ui/react";
 import { FiHome, FiFileText, FiVideo, FiHelpCircle, FiActivity, FiLogOut } from "react-icons/fi";
 import NextLink from "next/link";
 
 export default function AdminLayout({ children }) {
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+
   const menu = [
     { name: "Dashboard", icon: FiHome, href: "/admin" },
     { name: "Kelola Makalah", icon: FiFileText, href: "/admin/makalah" },
@@ -11,6 +18,53 @@ export default function AdminLayout({ children }) {
     { name: "Kelola Pertanyaan", icon: FiHelpCircle, href: "/admin/pertanyaan" },
     { name: "Hasil Diagnosa", icon: FiActivity, href: "/admin/diagnosa" },
   ];
+
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  const checkAuth = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        router.push('/login');
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', session.user.id)
+        .single();
+
+      if (!profile || profile.role !== 'admin') {
+        router.push('/');
+        return;
+      }
+
+      setLoading(false);
+    } catch (error) {
+      console.error("Auth error:", error);
+      router.push('/login');
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/login');
+  };
+
+  if (loading) {
+    return (
+      <Flex h="100vh" bg="gray.100" justify="center" align="center">
+        <VStack spacing={4}>
+          <Spinner size="xl" color="purple.500" />
+          <Text>Memeriksa akses admin...</Text>
+        </VStack>
+      </Flex>
+    );
+  }
 
   return (
     <Flex h="100vh" bg="gray.100">
@@ -43,22 +97,20 @@ export default function AdminLayout({ children }) {
           </Link>
         ))}
 
-        <Link
-          as={NextLink}
-          href="/login"
+        <Button
+          onClick={handleLogout}
           mt="auto"
-          color="red.300"
-          _hover={{ color: "red.500" }}
-          display="flex"
-          alignItems="center"
-          gap={3}
+          colorScheme="red"
+          variant="ghost"
+          justifyContent="flex-start"
+          leftIcon={<FiLogOut />}
         >
-          <FiLogOut /> Logout
-        </Link>
+          Logout
+        </Button>
       </VStack>
 
       {/* Konten halaman */}
-      <Box flex="1" p={6}>
+      <Box flex="1" p={6} overflow="auto">
         {children}
       </Box>
     </Flex>

@@ -27,7 +27,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      console.log("🔄 Starting login process...");
+      console.log(" Attempting login with:", form.email);
       
       // 1. Sign in user
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
@@ -36,55 +36,34 @@ export default function LoginPage() {
       });
 
       if (authError) {
-        console.error("❌ Auth error:", authError);
+        console.error("Auth error:", authError);
         throw authError;
       }
 
       const user = authData.user;
-      console.log("✅ Login successful, user ID:", user.id);
-      console.log("📧 User email:", user.email);
+      console.log("Login successful for user:", user.id);
 
-      // 2. Check user role from profiles table
-      console.log("🔄 Checking user profile...");
+      // 2. Fetch user role with better error handling
+      let userRole = 'user';
+      
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('role, full_name')
+        .select('role')
         .eq('id', user.id)
         .single();
 
-      console.log("📊 Profile response:", { profile, profileError });
-
-      let userRole = 'user'; // Default role
+      console.log("📊 Profile fetch result:", { profile, profileError });
 
       if (profileError) {
         if (profileError.code === 'PGRST116') {
-          console.log("ℹ️ Profile doesn't exist, creating default profile...");
-          
-          // Create default profile
-          const { error: createError } = await supabase
-            .from('profiles')
-            .insert([
-              {
-                id: user.id,
-                full_name: user.email?.split('@')[0] || 'User',
-                role: 'user'
-              }
-            ]);
-
-          if (createError) {
-            console.error("❌ Error creating profile:", createError);
-          } else {
-            console.log("✅ Default profile created");
-          }
+          console.log("No profile found, using default role 'user'");
         } else {
-          console.error("❌ Other profile error:", profileError);
+          console.error(" Profile error:", profileError);
         }
       } else if (profile) {
         userRole = profile.role || 'user';
-        console.log("🎯 User role found:", userRole);
+        console.log("User role determined:", userRole);
       }
-
-      console.log("🎯 Final user role before redirect:", userRole);
 
       toast({
         title: "Login berhasil!",
@@ -93,11 +72,11 @@ export default function LoginPage() {
       });
 
       // 3. Redirect based on role
-      if (userRole === 'admin') {
-        console.log("🔄 Redirecting to ADMIN dashboard...");
+      console.log("Redirecting to:", userRole === 'admin' ? '/admin' : '/');
+      
+      if (userRole === "admin") {
         router.push("/admin");
       } else {
-        console.log("🔄 Redirecting to USER dashboard...");
         router.push("/");
       }
 
