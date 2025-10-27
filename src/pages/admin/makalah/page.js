@@ -1,38 +1,43 @@
 "use client";
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase } from "@/lib/supabase";
+import { Box, Button, Table, Thead, Tr, Th, Td, Tbody, Heading } from "@chakra-ui/react";
+import Link from "next/link";
 
-export default function MakalahAdmin() {
-  const [makalah, setMakalah] = useState([]);
+export default function MakalahPage() {
+  const [data, setData] = useState([]);
 
   useEffect(() => {
-    load();
+    supabase.from("makalah").select("*").then(({ data }) => setData(data));
   }, []);
 
-  async function load() {
-    const { data } = await supabase.from("makalah").select("*");
-    setMakalah(data);
-  }
-
-  async function del(id) {
-    await supabase.from("makalah").delete().eq("id", id);
-    load();
-  }
-
   return (
-    <div>
-      <a href="/admin/makalah/tambah">
-        <button>Tambah Makalah</button>
-      </a>
+    <Box>
+      <Heading mb={4}>Kelola Makalah</Heading>
 
-      {makalah.map((m) => (
-        <div key={m.id}>
-          <h3>{m.judul}</h3>
-          <p>{m.deskripsi}</p>
-          <a href={m.file_url} target="_blank">Download</a>
-          <button onClick={() => del(m.id)}>Hapus</button>
-        </div>
-      ))}
-    </div>
+      <Button as={Link} href="/admin/makalah/tambah" colorScheme="blue" mb={4}>
+        + Tambah Makalah
+      </Button>
+      <Button colorScheme="red" size="sm" onClick={() => supabase.from("makalah").delete().eq("id", row.id).then(()=>location.reload())}>
+  Hapus
+</Button>
+
+      <Table bg="white" borderRadius="md" shadow="md">
+        <Thead>
+          <Tr>
+            <Th>Judul</Th>
+            <Th>File</Th>
+          </Tr>
+        </Thead>
+        <Tbody>
+          {data.map((row) => (
+            <Tr key={row.id}>
+              <Td>{row.title}</Td>
+              <Td><a href={row.file_url} target="_blank">Lihat</a></Td>
+            </Tr>
+          ))}
+        </Tbody>
+      </Table>
+    </Box>
   );
 }

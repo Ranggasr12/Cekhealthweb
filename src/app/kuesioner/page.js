@@ -1,50 +1,58 @@
 "use client";
 import { useEffect, useState } from "react";
+import { Box, Heading, Button, Table, Thead, Tbody, Tr, Th, Td, Spinner } from "@chakra-ui/react";
 import { supabase } from "@/lib/supabaseClient";
-import { Button, Radio, RadioGroup, Stack, Text, VStack } from "@chakra-ui/react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 
-export default function KuesionerPage() {
-  const router = useRouter();
-  const [pertanyaan, setPertanyaan] = useState([]);
-  const [jawaban, setJawaban] = useState({});
+export default function QuestionsPage() {
+  const [questions, setQuestions] = useState(null);
 
   useEffect(() => {
-    async function load() {
-      const { data } = await supabase.from("pertanyaan").select("*");
-      setPertanyaan(data);
-    }
-    load();
+    fetchQuestions();
   }, []);
 
-  async function submit() {
-    let totalSkor = 0;
-    pertanyaan.forEach((p) => {
-      const j = jawaban[p.id];
-      if (j === "Ya") totalSkor += p.skor_ya;
-      if (j === "Tidak") totalSkor += p.skor_tidak;
-    });
-
-    router.push(`/kuesioner/hasil?skor=${totalSkor}`);
+  async function fetchQuestions() {
+    const { data, error } = await supabase.from("questions").select("*");
+    setQuestions(data);
   }
 
+  async function deleteQuestion(id) {
+    await supabase.from("questions").delete().eq("id", id);
+    fetchQuestions();
+  }
+
+  if (!questions) return <Spinner />;
+
   return (
-    <VStack align="start" spacing={6}>
-      {pertanyaan.map((p) => (
-        <div key={p.id}>
-          <Text fontWeight="bold">{p.pertanyaan}</Text>
+    <Box p={6}>
+      <Heading mb={4}>Daftar Pertanyaan</Heading>
+      <Link href="/admin/questions/add">
+        <Button colorScheme="blue" mb={4}>Tambah Pertanyaan</Button>
+      </Link>
 
-          <RadioGroup onChange={(v)=> setJawaban({...jawaban, [p.id]: v})}>
-            <Stack direction="row">
-              {p.pilihan?.map((opt)=>(
-                <Radio key={opt} value={opt}>{opt}</Radio>
-              ))}
-            </Stack>
-          </RadioGroup>
-        </div>
-      ))}
-
-      <Button colorScheme="green" onClick={submit}>Lihat Hasil</Button>
-    </VStack>
+      <Table variant="striped">
+        <Thead>
+          <Tr>
+            <Th>Kategori</Th>
+            <Th>Pertanyaan</Th>
+            <Th>Aksi</Th>
+          </Tr>
+        </Thead>
+        <Tbody>
+          {questions.map(q => (
+            <Tr key={q.id}>
+              <Td>{q.category}</Td>
+              <Td>{q.question}</Td>
+              <Td>
+                <Link href={`/admin/questions/edit/${q.id}`}>
+                  <Button size="sm" colorScheme="yellow" mr={2}>Edit</Button>
+                </Link>
+                <Button size="sm" colorScheme="red" onClick={() => deleteQuestion(q.id)}>Hapus</Button>
+              </Td>
+            </Tr>
+          ))}
+        </Tbody>
+      </Table>
+    </Box>
   );
 }

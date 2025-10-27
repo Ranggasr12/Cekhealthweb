@@ -1,30 +1,37 @@
-import { useState } from "react";
-import { supabase } from "../../lib/supabaseClient";
-import { Box, Input, Button, Heading, useToast } from "@chakra-ui/react";
-import { useRouter } from "next/router";
+// pages/api/auth/login.js atau app/api/auth/route.js
+import { createClient } from '@supabase/supabase-js'
 
-export default function Login() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const toast = useToast();
-  const router = useRouter();
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+)
 
-  const handleLogin = async () => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return toast({ title: error.message, status: "error" });
+export async function POST(request) {
+  try {
+    const { email, password } = await request.json()
 
-    const { data: profile } = await supabase.from("profiles").select("role").eq("id", data.user.id).single();
-    
-    if (profile.role === "admin") router.push("/admin");
-    else router.push("/user");
-  };
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email,
+      password: password
+    })
 
-  return (
-    <Box maxW="md" mx="auto" mt="100px">
-      <Heading mb={4}>Login</Heading>
-      <Input placeholder="Email" mb={3} onChange={(e) => setEmail(e.target.value)} />
-      <Input placeholder="Password" type="password" mb={3} onChange={(e) => setPassword(e.target.value)} />
-      <Button colorScheme="blue" onClick={handleLogin}>Login</Button>
-    </Box>
-  );
+    if (error) {
+      return Response.json({
+        success: false,
+        error: error.message
+      }, { status: 400 })
+    }
+
+    return Response.json({
+      success: true,
+      user: data.user,
+      session: data.session
+    })
+
+  } catch (error) {
+    return Response.json({
+      success: false,
+      error: 'Internal server error'
+    }, { status: 500 })
+  }
 }

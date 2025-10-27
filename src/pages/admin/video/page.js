@@ -1,53 +1,64 @@
 "use client";
+
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase } from "@/lib/supabase";
+import {
+  Box, Button, Table, Thead, Tbody, Tr, Th, Td,
+  Heading, Flex, useToast
+} from "@chakra-ui/react";
+import Link from "next/link";
 
 export default function VideoAdmin() {
-  const [video, setVideo] = useState([]);
+  const [videos, setVideos] = useState([]);
+  const toast = useToast();
 
-  useEffect(() => {
-    load();
-  }, []);
-
-  async function load() {
+  const load = async () => {
     const { data } = await supabase.from("video").select("*").order("id", { ascending: false });
-    setVideo(data);
-  }
+    setVideos(data || []);
+  };
 
-  async function del(id) {
+  const deleteVideo = async (id) => {
     await supabase.from("video").delete().eq("id", id);
+    toast({ title: "Video dihapus!", status: "success" });
     load();
-  }
+  };
+
+  useEffect(() => { load(); }, []);
 
   return (
-    <div>
-      <a href="/admin/video/tambah">
-        <button style={{ marginBottom: 20 }}>➕ Tambah Video</button>
-      </a>
+    <Box bg="gray.800" color="white" p={6} borderRadius="lg" shadow="lg">
+      <Flex justify="space-between" mb={4}>
+        <Heading size="lg">Kelola Video</Heading>
+        <Link href="/admin/video/tambah">
+          <Button colorScheme="purple">Tambah Video</Button>
+        </Link>
+      </Flex>
 
-      {video.map((v) => (
-        <div key={v.id} style={{
-          padding: "12px",
-          border: "1px solid #ddd",
-          borderRadius: 8,
-          marginBottom: 12
-        }}>
-          <h3>{v.judul}</h3>
-          <p>{v.deskripsi}</p>
-
-          {v.youtube_url && (
-            <p>🎥 <a href={v.youtube_url} target="_blank">Lihat di YouTube</a></p>
-          )}
-
-          {v.file_url && (
-            <video src={v.file_url} width="300" controls />
-          )}
-
-          <button onClick={() => del(v.id)} style={{ marginTop: 10, color: "red" }}>
-            Hapus
-          </button>
-        </div>
-      ))}
-    </div>
+      <Table variant="simple" color="white">
+        <Thead bg="gray.700">
+          <Tr>
+            <Th color="white">Judul</Th>
+            <Th color="white">Tipe</Th>
+            <Th color="white">Aksi</Th>
+          </Tr>
+        </Thead>
+        <Tbody>
+          {videos.map((v) => (
+            <Tr key={v.id}>
+              <Td>{v.title}</Td>
+              <Td>{v.source_type === "file" ? "File" : "YouTube"}</Td>
+              <Td>
+                <Flex gap={3}>
+                  <Link href={`/admin/video/edit/${v.id}`}>
+                    <Button size="sm" colorScheme="blue">Edit</Button>
+                  </Link>
+                  <Button size="sm" colorScheme="red" onClick={() => deleteVideo(v.id)}>Hapus</Button>
+                </Flex>
+              </Td>
+            </Tr>
+          ))}
+        </Tbody>
+      </Table>
+    </Box>
   );
 }

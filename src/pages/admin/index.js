@@ -1,15 +1,23 @@
-import { Box, Heading, Button, VStack } from "@chakra-ui/react";
-import Link from "next/link";
+import { Box, SimpleGrid, Stat, StatLabel, StatNumber } from "@chakra-ui/react";
+import AdminLayout from "../../components/AdminLayout";
 
-export default function AdminDashboard() {
+export default function Dashboard() {
   return (
-    <Box p={6}>
-      <Heading mb={6}>Dashboard Admin</Heading>
-      <VStack spacing={4} align="start">
-        <Link href="/admin/makalah"><Button colorScheme="blue">Kelola Makalah</Button></Link>
-        <Link href="/admin/video"><Button colorScheme="teal">Kelola Video</Button></Link>
-        <Link href="/admin/question"><Button colorScheme="purple">Kelola Pertanyaan</Button></Link>
-      </VStack>
-    </Box>
+    <AdminLayout>
+      <SimpleGrid columns={3} spacing={6}>
+        <Stat bg="white" p={5} rounded="lg" shadow="md">
+          <StatLabel>Total Makalah</StatLabel>
+          <StatNumber>12</StatNumber>
+        </Stat>
+        <Stat bg="white" p={5} rounded="lg" shadow="md">
+          <StatLabel>Total Video</StatLabel>
+          <StatNumber>8</StatNumber>
+        </Stat>
+        <Stat bg="white" p={5} rounded="lg" shadow="md">
+          <StatLabel>Pertanyaan Masuk</StatLabel>
+          <StatNumber>20</StatNumber>
+        </Stat>
+      </SimpleGrid>
+    </AdminLayout>
   );
 }

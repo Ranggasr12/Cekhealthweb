@@ -34,7 +34,7 @@ export default function Navbar() {
 
   const navItems = [
     { href: "/", label: "Home" },
-    { href: "/news", label: "News" },
+    { href: "/makalah", label: "Makalah" },
     { href: "/video-gallery", label: "Video" },
     { href: "/form", label: "Cek Kesehatan" },
     { href: "/about", label: "About Us" },
