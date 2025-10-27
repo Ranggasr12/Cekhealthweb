@@ -44,24 +44,25 @@ export default function Navbar() {
   const isActive = (href) => pathname === href;
 
   useEffect(() => {
-    async function loadUser() {
-      const { data } = await supabase.auth.getUser();
-      if (data?.user) {
-        setUser(data.user);
+  async function loadUser() {
+    const { data: { session } } = await supabase.auth.getSession();
 
-        // Ambil role di tabel profiles
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", data.user.id)
-          .single();
+    if (session?.user) {
+      setUser(session.user);
 
-        setRole(profile?.role || "user");
-      }
-      setLoading(false);
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", session.user.id)
+        .single();
+
+      setRole(profile?.role || "user");
     }
-    loadUser();
-  }, []);
+    setLoading(false);
+  }
+  loadUser();
+}, []);
+
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
