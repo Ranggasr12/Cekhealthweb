@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback } from 'react'; // TAMBAHKAN useCallback
+import { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Grid,
@@ -25,20 +25,14 @@ import {
   Select,
   VStack,
   HStack,
-  NumberInput,
-  NumberInputField,
-  NumberInputStepper,
-  NumberIncrementStepper,
-  NumberDecrementStepper,
   Text,
-  Flex,
   Alert,
   AlertIcon,
-  SimpleGrid, // TAMBAHKAN INI
+  SimpleGrid,
 } from '@chakra-ui/react';
-import { supabase } from '../../../lib/supabase';
-import AdminLayout from '../../../components/AdminLayout';
-import { FiTrash2, FiEdit, FiHelpCircle } from 'react-icons/fi';
+import { supabase } from '@/lib/supabase';
+import AdminLayout from '@/components/AdminLayout';
+import { FiTrash2, FiHelpCircle, FiEdit } from 'react-icons/fi';
 
 export default function PertanyaanManagement() {
   const [pertanyaan, setPertanyaan] = useState([]);
@@ -47,8 +41,7 @@ export default function PertanyaanManagement() {
     pertanyaan_text: '',
     saran: '',
     indikasi: '',
-    skor_min: 0,
-    skor_max: 100
+    tingkat_keparahan: 'rendah'
   });
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -65,7 +58,12 @@ export default function PertanyaanManagement() {
     'Umum'
   ];
 
-  // Pindahkan fetchPertanyaan ke useCallback
+  const tingkatKeparahanOptions = [
+    { value: 'rendah', label: 'Rendah', color: 'green' },
+    { value: 'sedang', label: 'Sedang', color: 'orange' },
+    { value: 'tinggi', label: 'Tinggi', color: 'red' }
+  ];
+
   const fetchPertanyaan = useCallback(async () => {
     setLoading(true);
     try {
@@ -87,20 +85,19 @@ export default function PertanyaanManagement() {
     } finally {
       setLoading(false);
     }
-  }, [toast]); // Tambahkan toast sebagai dependency
+  }, [toast]);
 
   useEffect(() => {
     fetchPertanyaan();
-  }, [fetchPertanyaan]); // Tambahkan fetchPertanyaan sebagai dependency
+  }, [fetchPertanyaan]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
 
     try {
-      // Validasi skor
-      if (formData.skor_min >= formData.skor_max) {
-        throw new Error('Skor minimal harus lebih kecil dari skor maksimal');
+      if (!formData.pertanyaan_text.trim()) {
+        throw new Error('Pertanyaan tidak boleh kosong');
       }
 
       const { error } = await supabase
@@ -121,8 +118,7 @@ export default function PertanyaanManagement() {
         pertanyaan_text: '',
         saran: '',
         indikasi: '',
-        skor_min: 0,
-        skor_max: 100
+        tingkat_keparahan: 'rendah'
       });
       fetchPertanyaan();
     } catch (error) {
@@ -166,6 +162,16 @@ export default function PertanyaanManagement() {
         isClosable: true,
       });
     }
+  };
+
+  const getTingkatKeparahanColor = (tingkat) => {
+    const found = tingkatKeparahanOptions.find(opt => opt.value === tingkat);
+    return found ? found.color : 'gray';
+  };
+
+  const getTingkatKeparahanLabel = (tingkat) => {
+    const found = tingkatKeparahanOptions.find(opt => opt.value === tingkat);
+    return found ? found.label : 'Tidak Diketahui';
   };
 
   return (
@@ -232,44 +238,24 @@ export default function PertanyaanManagement() {
                         <Textarea
                           value={formData.indikasi}
                           onChange={(e) => setFormData(prev => ({ ...prev, indikasi: e.target.value }))}
-                          placeholder="Indikasi kesehatan"
+                          placeholder="Indikasi kesehatan (untuk analisis internal)"
                           rows={2}
                         />
                       </FormControl>
 
-                      <HStack w="full" spacing={4}>
-                        <FormControl>
-                          <FormLabel>Skor Minimal</FormLabel>
-                          <NumberInput
-                            value={formData.skor_min}
-                            onChange={(value) => setFormData(prev => ({ ...prev, skor_min: parseInt(value) || 0 }))}
-                            min={0}
-                            max={100}
-                          >
-                            <NumberInputField />
-                            <NumberInputStepper>
-                              <NumberIncrementStepper />
-                              <NumberDecrementStepper />
-                            </NumberInputStepper>
-                          </NumberInput>
-                        </FormControl>
-
-                        <FormControl>
-                          <FormLabel>Skor Maksimal</FormLabel>
-                          <NumberInput
-                            value={formData.skor_max}
-                            onChange={(value) => setFormData(prev => ({ ...prev, skor_max: parseInt(value) || 100 }))}
-                            min={0}
-                            max={100}
-                          >
-                            <NumberInputField />
-                            <NumberInputStepper>
-                              <NumberIncrementStepper />
-                              <NumberDecrementStepper />
-                            </NumberInputStepper>
-                          </NumberInput>
-                        </FormControl>
-                      </HStack>
+                      <FormControl>
+                        <FormLabel>Tingkat Keparahan</FormLabel>
+                        <Select
+                          value={formData.tingkat_keparahan}
+                          onChange={(e) => setFormData(prev => ({ ...prev, tingkat_keparahan: e.target.value }))}
+                        >
+                          {tingkatKeparahanOptions.map((tingkat) => (
+                            <option key={tingkat.value} value={tingkat.value}>
+                              {tingkat.label}
+                            </option>
+                          ))}
+                        </Select>
+                      </FormControl>
 
                       <Button
                         type="submit"
@@ -296,15 +282,10 @@ export default function PertanyaanManagement() {
                   
                   {pertanyaan.length === 0 ? (
                     <Box textAlign="center" py={8}>
-                      <IconButton
-                        icon={<FiHelpCircle />}
-                        boxSize={12}
-                        color="gray.400"
-                        mb={4}
-                        variant="ghost"
-                        aria-label="No questions"
-                      />
-                      <Text color="gray.500">Belum ada pertanyaan</Text>
+                      <FiHelpCircle size={48} color="#CBD5E0" />
+                      <Text color="gray.500" mt={4}>
+                        Belum ada pertanyaan
+                      </Text>
                     </Box>
                   ) : (
                     <Box maxH="600px" overflowY="auto">
@@ -313,7 +294,7 @@ export default function PertanyaanManagement() {
                           <Tr>
                             <Th>Penyakit</Th>
                             <Th>Pertanyaan</Th>
-                            <Th>Skor</Th>
+                            <Th>Keparahan</Th>
                             <Th>Aksi</Th>
                           </Tr>
                         </Thead>
@@ -332,15 +313,18 @@ export default function PertanyaanManagement() {
                                   </Text>
                                   {item.saran && (
                                     <Text fontSize="xs" color="gray.600" noOfLines={1}>
-                                      Saran: {item.saran}
+                                      💡 {item.saran}
                                     </Text>
                                   )}
                                 </VStack>
                               </Td>
                               <Td>
-                                <Text fontSize="sm" fontWeight="medium">
-                                  {item.skor_min}-{item.skor_max}
-                                </Text>
+                                <Badge 
+                                  colorScheme={getTingkatKeparahanColor(item.tingkat_keparahan)}
+                                  fontSize="xs"
+                                >
+                                  {getTingkatKeparahanLabel(item.tingkat_keparahan)}
+                                </Badge>
                               </Td>
                               <Td>
                                 <HStack>

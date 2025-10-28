@@ -17,69 +17,57 @@ import {
   ModalCloseButton,
   useDisclosure,
   Skeleton,
+  Alert,
+  AlertIcon,
+  Flex,
+  Badge,
+  HStack,
+  Icon,
+  Image,
 } from "@chakra-ui/react";
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
+import { FiYoutube, FiVideo, FiRefreshCw, FiPlay } from 'react-icons/fi';
 
 export default function VideoGallery() {
   const router = useRouter();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [selectedVideo, setSelectedVideo] = useState(null);
-  const [isClient, setIsClient] = useState(false);
+  const [videos, setVideos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    setIsClient(true);
+    fetchVideos();
   }, []);
 
-  const videos = [
-    {
-      id: 1,
-      title: "Tips Kesehatan Dasar",
-      url: "https://www.youtube.com/embed/dQw4w9WgXcQ",
-      description: "Video tentang tips menjaga kesehatan sehari-hari",
-      thumbnail: "/images/video-thumb-1.jpg",
-      duration: "5:30"
-    },
-    {
-      id: 2,
-      title: "Pola Hidup Sehat", 
-      url: "https://www.youtube.com/embed/dQw4w9WgXcQ",
-      description: "Panduan pola hidup sehat untuk semua usia",
-      thumbnail: "/images/video-thumb-2.jpg",
-      duration: "8:15"
-    },
-    {
-      id: 3,
-      title: "Olahraga di Rumah",
-      url: "https://www.youtube.com/embed/dQw4w9WgXcQ",
-      description: "Latihan olahraga sederhana yang bisa dilakukan di rumah",
-      thumbnail: "/images/video-thumb-3.jpg",
-      duration: "12:45"
-    },
-    {
-      id: 4,
-      title: "Makanan Sehat",
-      url: "https://www.youtube.com/embed/dQw4w9WgXcQ",
-      description: "Rekomendasi makanan sehat untuk keluarga",
-      thumbnail: "/images/video-thumb-4.jpg",
-      duration: "7:20"
-    },
-    {
-      id: 5,
-      title: "Pencegahan Diabetes",
-      url: "https://www.youtube.com/embed/dQw4w9WgXcQ",
-      description: "Cara mencegah dan mengelola diabetes",
-      thumbnail: "/images/video-thumb-5.jpg",
-      duration: "10:30"
-    },
-    {
-      id: 6,
-      title: "Kesehatan Mental",
-      url: "https://www.youtube.com/embed/dQw4w9WgXcQ",
-      description: "Tips menjaga kesehatan mental di era modern",
-      thumbnail: "/images/video-thumb-6.jpg",
-      duration: "15:20"
+  const fetchVideos = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log('🔄 Fetching videos from database...');
+      
+      const { data, error } = await supabase
+        .from('videos')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('❌ Error fetching videos:', error);
+        throw error;
+      }
+
+      console.log('✅ Videos fetched:', data);
+      setVideos(data || []);
+      
+    } catch (error) {
+      console.error('🎯 Failed to fetch videos:', error);
+      setError('Gagal memuat video. Silakan refresh halaman.');
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
   const openVideo = (video) => {
     setSelectedVideo(video);
@@ -90,24 +78,125 @@ export default function VideoGallery() {
     router.push('/');
   };
 
-  if (!isClient) {
+  const getYouTubeThumbnail = (url) => {
+    if (!url) return '/images/video-placeholder.jpg';
+    
+    try {
+      if (url.includes('youtube.com') || url.includes('youtu.be')) {
+        let videoId = '';
+        
+        if (url.includes('youtu.be')) {
+          // Format: https://youtu.be/VIDEO_ID
+          videoId = url.split('/').pop()?.split('?')[0];
+        } else if (url.includes('youtube.com')) {
+          // Format: https://www.youtube.com/watch?v=VIDEO_ID
+          const urlObj = new URL(url);
+          videoId = urlObj.searchParams.get('v');
+        }
+        
+        if (videoId) {
+          // Gunakan maxresdefault untuk kualitas tertinggi
+          return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+        }
+      }
+    } catch (error) {
+      console.error('Error generating thumbnail:', error);
+    }
+    
+    return '/images/video-placeholder.jpg';
+  };
+
+  const getEmbedUrl = (video) => {
+    if (video.video_type === 'youtube') {
+      let videoId = '';
+      
+      if (video.video_url.includes('youtu.be')) {
+        videoId = video.video_url.split('/').pop()?.split('?')[0];
+      } else {
+        try {
+          const urlObj = new URL(video.video_url);
+          videoId = urlObj.searchParams.get('v');
+        } catch (error) {
+          console.error('Error parsing YouTube URL:', error);
+        }
+      }
+      
+      if (videoId) {
+        return `https://www.youtube.com/embed/${videoId}?rel=0&showinfo=0`;
+      }
+    }
+    
+    // Untuk video upload, gunakan URL langsung
+    return video.video_url;
+  };
+
+  const getVideoTypeIcon = (videoType) => {
+    return videoType === 'youtube' ? FiYoutube : FiVideo;
+  };
+
+  const getVideoTypeColor = (videoType) => {
+    return videoType === 'youtube' ? 'red' : 'blue';
+  };
+
+  // Fallback untuk thumbnail jika maxresdefault tidak tersedia
+  const handleThumbnailError = (video, event) => {
+    console.log('🔄 Falling back to lower quality thumbnail for:', video.title);
+    
+    if (video.video_url.includes('youtube.com') || video.video_url.includes('youtu.be')) {
+      let videoId = '';
+      
+      if (video.video_url.includes('youtu.be')) {
+        videoId = video.video_url.split('/').pop()?.split('?')[0];
+      } else {
+        try {
+          const urlObj = new URL(video.video_url);
+          videoId = urlObj.searchParams.get('v');
+        } catch (error) {
+          console.error('Error parsing YouTube URL:', error);
+        }
+      }
+      
+      if (videoId) {
+        // Coba hqdefault jika maxresdefault tidak ada
+        event.target.src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+      }
+    } else {
+      event.target.src = '/images/video-placeholder.jpg';
+    }
+  };
+
+  if (loading) {
     return (
-      <Box bg="white" minH="100vh">
-        <Container maxW="container.xl" py={10}>
-          <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={8}>
-            {[1, 2, 3, 4, 5, 6].map((item) => (
-              <Skeleton key={item} height="300px" borderRadius="xl" />
-            ))}
-          </SimpleGrid>
+      <Box bg="gray.50" minH="100vh" py={8}>
+        <Container maxW="container.xl">
+          <VStack spacing={8}>
+            <Box textAlign="center">
+              <Skeleton height="40px" width="300px" mx="auto" mb={4} />
+              <Skeleton height="24px" width="400px" mx="auto" />
+            </Box>
+            
+            <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6} w="100%">
+              {[1, 2, 3, 4, 5, 6].map((item) => (
+                <Box key={item} bg="white" borderRadius="xl" boxShadow="lg" overflow="hidden">
+                  <Skeleton height="200px" />
+                  <Box p={4}>
+                    <Skeleton height="20px" mb={2} />
+                    <Skeleton height="16px" />
+                  </Box>
+                </Box>
+              ))}
+            </SimpleGrid>
+          </VStack>
         </Container>
       </Box>
     );
   }
 
   return (
-    <Box bg="white" minH="100vh" pt={0}>
-      <Container maxW="container.xl" py={{ base: 6, md: 10 }}>
+    <Box bg="gray.50" minH="100vh" py={8}>
+      <Container maxW="container.xl">
         <VStack spacing={8}>
+          {/* Header */}
           <Box textAlign="center">
             <Heading as="h1" size={{ base: "xl", md: "2xl" }} mb={4} color="purple.800">
               Video Gallery
@@ -117,82 +206,213 @@ export default function VideoGallery() {
             </Text>
           </Box>
 
-          <SimpleGrid 
-            columns={{ base: 1, sm: 2, lg: 3 }} 
-            spacing={{ base: 4, md: 6, lg: 8 }} 
-            w="100%"
-          >
-            {videos.map((video) => (
-              <Box
-                key={video.id}
-                bg="white"
-                borderRadius="xl"
-                boxShadow="lg"
-                overflow="hidden"
-                cursor="pointer"
-                transition="all 0.3s"
-                _hover={{
-                  transform: "translateY(-8px)",
-                  boxShadow: "2xl"
-                }}
-                onClick={() => openVideo(video)}
-              >
-                <Box
-                  position="relative"
-                  paddingBottom="56.25%"
-                  bg="gray.200"
-                  backgroundImage={`url(${video.thumbnail})`}
-                  backgroundSize="cover"
-                  backgroundPosition="center"
+          {/* Error Alert */}
+          {error && (
+            <Alert status="error" borderRadius="lg" maxW="2xl">
+              <AlertIcon />
+              <Box flex="1">
+                <Text>{error}</Text>
+                <Button 
+                  size="sm" 
+                  colorScheme="red" 
+                  variant="outline" 
+                  mt={2}
+                  leftIcon={<FiRefreshCw />}
+                  onClick={fetchVideos}
                 >
-                  <Box
-                    position="absolute"
-                    top="50%"
-                    left="50%"
-                    transform="translate(-50%, -50%)"
-                    bg="black"
-                    color="white"
-                    px={3}
-                    py={1}
-                    borderRadius="md"
-                    opacity="0.9"
-                    fontSize={{ base: "sm", md: "md" }}
-                  >
-                    ▶ Play
-                  </Box>
-                  <Box
-                    position="absolute"
-                    bottom={2}
-                    right={2}
-                    bg="black"
-                    color="white"
-                    px={2}
-                    py={1}
-                    borderRadius="sm"
-                    fontSize="sm"
-                  >
-                    {video.duration}
-                  </Box>
-                </Box>
-                
-                <Box p={{ base: 4, md: 6 }}>
-                  <Heading as="h3" size={{ base: "sm", md: "md" }} mb={2} color="purple.700">
-                    {video.title}
-                  </Heading>
-                  <Text color="gray.600" fontSize={{ base: "xs", md: "sm" }}>
-                    {video.description}
-                  </Text>
-                </Box>
+                  Coba Lagi
+                </Button>
               </Box>
-            ))}
-          </SimpleGrid>
+            </Alert>
+          )}
+
+          {/* Video Grid */}
+          {videos.length === 0 ? (
+            <Box textAlign="center" py={12}>
+              <Icon 
+                as={FiVideo} 
+                boxSize={16} 
+                color="gray.400" 
+                mb={4} 
+              />
+              <Heading size="lg" color="gray.500" mb={2}>
+                Belum Ada Video
+              </Heading>
+              <Text color="gray.500">
+                Video edukasi akan segera tersedia. Silakan cek kembali nanti.
+              </Text>
+            </Box>
+          ) : (
+            <SimpleGrid 
+              columns={{ base: 1, sm: 2, lg: 3 }} 
+              spacing={{ base: 4, md: 6, lg: 8 }} 
+              w="100%"
+            >
+              {videos.map((video) => (
+                <Box
+                  key={video.id}
+                  bg="white"
+                  borderRadius="xl"
+                  boxShadow="lg"
+                  overflow="hidden"
+                  cursor="pointer"
+                  transition="all 0.3s"
+                  _hover={{
+                    transform: "translateY(-8px)",
+                    boxShadow: "2xl"
+                  }}
+                  onClick={() => openVideo(video)}
+                >
+                  {/* Thumbnail Container */}
+                  <Box
+                    position="relative"
+                    paddingBottom="56.25%" // 16:9 aspect ratio
+                    bg="gray.200"
+                    overflow="hidden"
+                  >
+                    {/* YouTube Thumbnail */}
+                    <Image
+                      src={getYouTubeThumbnail(video.video_url)}
+                      alt={video.title}
+                      position="absolute"
+                      top="0"
+                      left="0"
+                      width="100%"
+                      height="100%"
+                      objectFit="cover"
+                      onError={(e) => handleThumbnailError(video, e)}
+                    />
+                    
+                    {/* Play Button Overlay */}
+                    <Box
+                      position="absolute"
+                      top="0"
+                      left="0"
+                      width="100%"
+                      height="100%"
+                      bg="black"
+                      opacity="0"
+                      transition="opacity 0.3s"
+                      _groupHover={{ opacity: 0.2 }}
+                      display="flex"
+                      alignItems="center"
+                      justifyContent="center"
+                    >
+                      <Box
+                        bg="rgba(0,0,0,0.7)"
+                        color="white"
+                        borderRadius="50%"
+                        width="60px"
+                        height="60px"
+                        display="flex"
+                        alignItems="center"
+                        justifyContent="center"
+                        transition="all 0.3s"
+                        _hover={{
+                          transform: "scale(1.1)",
+                          bg: "rgba(0,0,0,0.9)"
+                        }}
+                      >
+                        <Icon as={FiPlay} boxSize={6} color="white" />
+                      </Box>
+                    </Box>
+                    
+                    {/* Video Type Badge */}
+                    <Box
+                      position="absolute"
+                      top={3}
+                      left={3}
+                    >
+                      <Badge 
+                        colorScheme={getVideoTypeColor(video.video_type)}
+                        display="flex"
+                        alignItems="center"
+                        gap={1}
+                        px={2}
+                        py={1}
+                        borderRadius="md"
+                      >
+                        <Icon as={getVideoTypeIcon(video.video_type)} boxSize={3} />
+                        {video.video_type === 'youtube' ? 'YouTube' : 'Video'}
+                      </Badge>
+                    </Box>
+
+                    {/* Hover Play Button */}
+                    <Box
+                      position="absolute"
+                      top="50%"
+                      left="50%"
+                      transform="translate(-50%, -50%)"
+                      opacity="0"
+                      transition="all 0.3s"
+                      _groupHover={{ opacity: 1 }}
+                    >
+                      <Box
+                        bg="rgba(0,0,0,0.8)"
+                        color="white"
+                        borderRadius="50%"
+                        width="70px"
+                        height="70px"
+                        display="flex"
+                        alignItems="center"
+                        justifyContent="center"
+                        border="3px solid white"
+                      >
+                        <Icon as={FiPlay} boxSize={8} color="white" ml={1} />
+                      </Box>
+                    </Box>
+                  </Box>
+                  
+                  {/* Video Info */}
+                  <Box p={{ base: 4, md: 6 }}>
+                    <Heading as="h3" size={{ base: "sm", md: "md" }} mb={2} color="purple.700" noOfLines={2}>
+                      {video.title}
+                    </Heading>
+                    
+                    {video.description && (
+                      <Text color="gray.600" fontSize={{ base: "xs", md: "sm" }} mb={3} noOfLines={3}>
+                        {video.description}
+                      </Text>
+                    )}
+                    
+                    <HStack justify="space-between" fontSize="xs" color="gray.500">
+                      <Text>
+                        {new Date(video.created_at).toLocaleDateString('id-ID')}
+                      </Text>
+                      <Badge colorScheme="purple" variant="subtle">
+                        Edukasi
+                      </Badge>
+                    </HStack>
+                  </Box>
+                </Box>
+              ))}
+            </SimpleGrid>
+          )}
+
+          {/* Back Button */}
+          <Button
+            onClick={handleBack}
+            variant="outline"
+            colorScheme="purple"
+            size="lg"
+          >
+            Kembali ke Beranda
+          </Button>
         </VStack>
       </Container>
 
+      {/* Video Modal */}
       <Modal isOpen={isOpen} onClose={onClose} size={{ base: "full", md: "4xl" }}>
         <ModalOverlay />
         <ModalContent>
-          <ModalHeader>{selectedVideo?.title}</ModalHeader>
+          <ModalHeader>
+            <HStack>
+              <Icon as={getVideoTypeIcon(selectedVideo?.video_type)} 
+                color={getVideoTypeColor(selectedVideo?.video_type)} 
+              />
+              <Text>{selectedVideo?.title}</Text>
+            </HStack>
+          </ModalHeader>
           <ModalCloseButton />
           <ModalBody pb={6}>
             {selectedVideo && (
@@ -203,9 +423,10 @@ export default function VideoGallery() {
                   height="0"
                   overflow="hidden"
                   borderRadius="md"
+                  bg="black"
                 >
                   <iframe
-                    src={selectedVideo.url}
+                    src={getEmbedUrl(selectedVideo)}
                     title={selectedVideo.title}
                     width="100%"
                     height="100%"
@@ -218,12 +439,28 @@ export default function VideoGallery() {
                       border: "none",
                       borderRadius: "8px"
                     }}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen
                   />
                 </Box>
-                <Text mt={4} color="gray.600">
-                  {selectedVideo.description}
-                </Text>
+                
+                {selectedVideo.description && (
+                  <Text mt={4} color="gray.600" fontSize="lg">
+                    {selectedVideo.description}
+                  </Text>
+                )}
+                
+                <HStack mt={4} fontSize="sm" color="gray.500">
+                  <Text>Ditambahkan pada:</Text>
+                  <Text fontWeight="medium">
+                    {new Date(selectedVideo.created_at).toLocaleDateString('id-ID', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
+                    })}
+                  </Text>
+                </HStack>
               </>
             )}
           </ModalBody>

@@ -10,7 +10,6 @@ import {
   HStack,
   Card,
   CardBody,
-  CardHeader,
   Badge,
   SimpleGrid,
   Button,
@@ -25,8 +24,10 @@ import {
   Flex,
   useColorModeValue,
   Alert,
-  AlertIcon
+  AlertIcon,
+  Spinner
 } from "@chakra-ui/react";
+import { supabase } from '@/lib/supabase';
 
 // Fallback icons
 const SearchIconFallback = (props) => (
@@ -89,92 +90,10 @@ const CalendarIconFallback = (props) => (
   </svg>
 );
 
-// Mock data untuk makalah
-const mockMakalah = [
-  {
-    id: '1',
-    title: 'Panduan Kesehatan Jantung dan Pembuluh Darah',
-    description: 'Makalah lengkap tentang cara menjaga kesehatan jantung, pencegahan penyakit kardiovaskular, dan pola hidup sehat untuk jantung.',
-    category: 'jantung',
-    file_size: 2048576,
-    pages: 45,
-    author: 'Dr. Ahmad Santoso, Sp.JP',
-    institution: 'RS Jantung Harapan Kita',
-    date: '2024-01-15',
-    pdf_url: '/sample.pdf',
-    featured: true
-  },
-  {
-    id: '2',
-    title: 'Diabetes Mellitus Tipe 2: Pencegahan dan Penanganan',
-    description: 'Penelitian terbaru tentang manajemen diabetes tipe 2, termasuk terapi farmakologi dan modifikasi gaya hidup.',
-    category: 'diabetes',
-    file_size: 1572864,
-    pages: 32,
-    author: 'Dr. Maria Wijaya, Sp.PD',
-    institution: 'Fakultas Kedokteran Universitas Indonesia',
-    date: '2024-01-10',
-    pdf_url: '/sample.pdf',
-    featured: true
-  },
-  {
-    id: '3',
-    title: 'Gaya Hidup Sehat di Era Digital',
-    description: 'Analisis dampak teknologi digital terhadap kesehatan dan strategi menjaga gaya hidup sehat di tengah kesibukan modern.',
-    category: 'gaya-hidup',
-    file_size: 1048576,
-    pages: 28,
-    author: 'Prof. Dr. Budi Raharjo',
-    institution: 'Institut Teknologi Bandung',
-    date: '2024-01-05',
-    pdf_url: '/sample.pdf',
-    featured: false
-  },
-  {
-    id: '4',
-    title: 'Nutrisi Optimal untuk Lansia',
-    description: 'Panduan lengkap kebutuhan nutrisi pada usia lanjut dan strategi pemenuhan gizi seimbang untuk kesehatan optimal.',
-    category: 'nutrisi',
-    file_size: 1258291,
-    pages: 36,
-    author: 'Dr. Siti Fatimah, Sp.GK',
-    institution: 'RS Cipto Mangunkusumo',
-    date: '2024-01-03',
-    pdf_url: '/sample.pdf',
-    featured: false
-  },
-  {
-    id: '5',
-    title: 'Kesehatan Mental di Tempat Kerja',
-    description: 'Studi tentang faktor-faktor yang mempengaruhi kesehatan mental pekerja dan strategi penanganannya.',
-    category: 'mental',
-    file_size: 1835008,
-    pages: 41,
-    author: 'Dr. Andi Prasetyo, Sp.KJ',
-    institution: 'RS Jiwa Dr. Soeharto Heerdjan',
-    date: '2023-12-28',
-    pdf_url: '/sample.pdf',
-    featured: true
-  },
-  {
-    id: '6',
-    title: 'Pencegahan Stunting pada Balita',
-    description: 'Intervensi efektif untuk mencegah dan menangani stunting pada anak balita di Indonesia.',
-    category: 'anak',
-    file_size: 943718,
-    pages: 24,
-    author: 'Dr. Lisa Permata, Sp.A',
-    institution: 'RS Anak dan Bunda Harapan Kita',
-    date: '2023-12-25',
-    pdf_url: '/sample.pdf',
-    featured: false
-  }
-];
-
 export default function MakalahPage() {
-  const [isClient, setIsClient] = useState(false);
   const [makalah, setMakalah] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [category, setCategory] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
@@ -188,26 +107,70 @@ export default function MakalahPage() {
     { value: 'nutrisi', label: 'Nutrisi' },
     { value: 'mental', label: 'Kesehatan Mental' },
     { value: 'anak', label: 'Kesehatan Anak' },
+    { value: 'umum', label: 'Kesehatan Umum' },
   ];
 
   useEffect(() => {
-    setIsClient(true);
-    const fetchMakalah = async () => {
-      setLoading(true);
-      // Simulasi loading
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setMakalah(mockMakalah);
-      setLoading(false);
-    };
-
     fetchMakalah();
   }, []);
 
+  const fetchMakalah = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log('🔄 Fetching makalah from database...');
+      
+      const { data, error } = await supabase
+        .from('makalah')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('❌ Error fetching makalah:', error);
+        throw error;
+      }
+
+      console.log('✅ Makalah fetched:', data);
+      setMakalah(data || []);
+      
+    } catch (error) {
+      console.error('🎯 Failed to fetch makalah:', error);
+      setError('Gagal memuat makalah. Silakan refresh halaman.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Auto-detect category dari judul atau deskripsi
+  const detectCategory = (makalahItem) => {
+    const title = makalahItem.title?.toLowerCase() || '';
+    const description = makalahItem.description?.toLowerCase() || '';
+    
+    const text = title + ' ' + description;
+    
+    if (text.includes('jantung') || text.includes('kardi') || text.includes('jantung')) {
+      return 'jantung';
+    } else if (text.includes('diabet') || text.includes('gula darah')) {
+      return 'diabetes';
+    } else if (text.includes('gizi') || text.includes('nutrisi') || text.includes('makanan')) {
+      return 'nutrisi';
+    } else if (text.includes('mental') || text.includes('psikolog') || text.includes('stres')) {
+      return 'mental';
+    } else if (text.includes('anak') || text.includes('balita') || text.includes('stunting')) {
+      return 'anak';
+    } else if (text.includes('gaya hidup') || text.includes('olahraga') || text.includes('kebugaran')) {
+      return 'gaya-hidup';
+    } else {
+      return 'umum';
+    }
+  };
+
   const filteredMakalah = makalah.filter(item => {
-    const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.author.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = category === 'all' || item.category === category;
+    const matchesSearch = item.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         item.description?.toLowerCase().includes(searchTerm.toLowerCase());
+    const itemCategory = detectCategory(item);
+    const matchesCategory = category === 'all' || itemCategory === category;
     return matchesSearch && matchesCategory;
   });
 
@@ -216,11 +179,17 @@ export default function MakalahPage() {
   const currentMakalah = filteredMakalah.slice(startIndex, startIndex + itemsPerPage);
 
   const formatDate = (dateString) => {
-    const options = { year: 'numeric', month: 'long', day: 'numeric' };
-    return new Date(dateString).toLocaleDateString('id-ID', options);
+    if (!dateString) return 'Tanggal tidak tersedia';
+    try {
+      const options = { year: 'numeric', month: 'long', day: 'numeric' };
+      return new Date(dateString).toLocaleDateString('id-ID', options);
+    } catch (error) {
+      return 'Tanggal tidak valid';
+    }
   };
 
   const formatFileSize = (bytes) => {
+    if (!bytes) return 'Ukuran tidak tersedia';
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
@@ -235,45 +204,26 @@ export default function MakalahPage() {
       'gaya-hidup': 'green',
       'nutrisi': 'blue',
       'mental': 'purple',
-      'anak': 'pink'
+      'anak': 'pink',
+      'umum': 'gray'
     };
     return colors[category] || 'gray';
   };
 
   const handleDownload = (pdfUrl, fileName) => {
+    if (!pdfUrl) {
+      alert('URL PDF tidak tersedia');
+      return;
+    }
+    
     // Untuk demo, kita buka di tab baru
     window.open(pdfUrl, '_blank');
-    
-    // Di production, Anda bisa implementasi download langsung:
-    // const link = document.createElement('a');
-    // link.href = pdfUrl;
-    // link.download = fileName || 'document.pdf';
-    // link.target = '_blank';
-    // link.click();
   };
 
   const bgGradient = useColorModeValue(
     "linear(to-r, blue.50, teal.50)",
     "linear(to-r, blue.900, teal.900)"
   );
-
-  if (!isClient) {
-    return (
-      <Box bg="white" minH="100vh">
-        <Skeleton height="60px" />
-        <Container maxW="container.xl" py={10}>
-          <VStack spacing={8}>
-            <Skeleton height="50px" width="300px" />
-            <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6} w="100%">
-              {[1, 2, 3, 4, 5, 6].map((item) => (
-                <Skeleton key={item} height="400px" borderRadius="xl" />
-              ))}
-            </SimpleGrid>
-          </VStack>
-        </Container>
-      </Box>
-    );
-  }
 
   return (
     <Box bg="white" minH="100vh" pt={0}>
@@ -291,18 +241,27 @@ export default function MakalahPage() {
         </Container>
       </Box>
 
-      {/* Demo Mode Alert */}
-      <Container maxW="container.xl" mt={4}>
-        <Alert status="info" borderRadius="md">
-          <AlertIcon />
-          <Box>
-            <Text fontWeight="bold">Demo Mode</Text>
-            <Text fontSize="sm">
-              Sedang menggunakan data contoh. File PDF yang didownload adalah contoh saja.
-            </Text>
-          </Box>
-        </Alert>
-      </Container>
+      {/* Error Alert */}
+      {error && (
+        <Container maxW="container.xl" mt={4}>
+          <Alert status="error" borderRadius="md">
+            <AlertIcon />
+            <Box flex="1">
+              <Text fontWeight="bold">Error</Text>
+              <Text fontSize="sm">{error}</Text>
+              <Button 
+                size="sm" 
+                colorScheme="red" 
+                variant="outline" 
+                mt={2}
+                onClick={fetchMakalah}
+              >
+                Coba Lagi
+              </Button>
+            </Box>
+          </Alert>
+        </Container>
+      )}
 
       {/* Search and Filter Section */}
       <Container maxW="container.xl" py={8}>
@@ -373,89 +332,69 @@ export default function MakalahPage() {
         ) : (
           <>
             <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
-              {currentMakalah.map((item) => (
-                <Card 
-                  key={item.id} 
-                  borderRadius="xl" 
-                  boxShadow="lg"
-                  transition="all 0.3s"
-                  _hover={{ 
-                    transform: "translateY(-4px)",
-                    boxShadow: "2xl"
-                  }}
-                  borderTop={item.featured ? "4px solid" : "none"}
-                  borderTopColor={item.featured ? "blue.500" : "transparent"}
-                >
-                  <CardBody>
-                    <VStack spacing={4} align="start" h="100%">
-                      {/* Header dengan icon dan badge */}
-                      <HStack justify="space-between" w="100%">
-                        <HStack>
-                          <Icon as={FileIconFallback} boxSize={6} color="blue.500" />
-                          <Badge 
-                            colorScheme={getCategoryColor(item.category)}
-                            fontSize="sm"
-                          >
-                            {categories.find(cat => cat.value === item.category)?.label}
-                          </Badge>
+              {currentMakalah.map((item) => {
+                const itemCategory = detectCategory(item);
+                return (
+                  <Card 
+                    key={item.id} 
+                    borderRadius="xl" 
+                    boxShadow="lg"
+                    transition="all 0.3s"
+                    _hover={{ 
+                      transform: "translateY(-4px)",
+                      boxShadow: "2xl"
+                    }}
+                  >
+                    <CardBody>
+                      <VStack spacing={4} align="start" h="100%">
+                        {/* Header dengan icon dan badge */}
+                        <HStack justify="space-between" w="100%">
+                          <HStack>
+                            <Icon as={FileIconFallback} boxSize={6} color="blue.500" />
+                            <Badge 
+                              colorScheme={getCategoryColor(itemCategory)}
+                              fontSize="sm"
+                            >
+                              {categories.find(cat => cat.value === itemCategory)?.label}
+                            </Badge>
+                          </HStack>
                         </HStack>
-                        {item.featured && (
-                          <Badge colorScheme="blue" fontSize="xs">
-                            FEATURED
-                          </Badge>
-                        )}
-                      </HStack>
 
-                      {/* Judul dan Deskripsi */}
-                      <Box flex={1}>
-                        <Heading size="md" color="blue.800" noOfLines={2} mb={2}>
-                          {item.title}
-                        </Heading>
-                        
-                        <Text color="gray.600" noOfLines={3} fontSize="sm" mb={3}>
-                          {item.description}
-                        </Text>
-
-                        {/* Informasi Penulis */}
-                        <VStack spacing={1} align="start" mb={3}>
-                          <Text fontSize="sm" fontWeight="medium" color="gray.700">
-                            {item.author}
+                        {/* Judul dan Deskripsi */}
+                        <Box flex={1}>
+                          <Heading size="md" color="blue.800" noOfLines={2} mb={2}>
+                            {item.title || 'Judul Tidak Tersedia'}
+                          </Heading>
+                          
+                          <Text color="gray.600" noOfLines={3} fontSize="sm" mb={3}>
+                            {item.description || 'Deskripsi tidak tersedia'}
                           </Text>
-                          <Text fontSize="xs" color="gray.500">
-                            {item.institution}
-                          </Text>
-                        </VStack>
-                      </Box>
+                        </Box>
 
-                      {/* Metadata */}
-                      <HStack justify="space-between" w="100%" color="gray.500" fontSize="sm">
-                        <HStack spacing={3}>
+                        {/* Metadata */}
+                        <HStack justify="space-between" w="100%" color="gray.500" fontSize="sm">
                           <HStack spacing={1}>
                             <CalendarIconFallback />
-                            <Text>{formatDate(item.date)}</Text>
+                            <Text>{formatDate(item.created_at)}</Text>
                           </HStack>
-                          <Text>•</Text>
-                          <Text>{item.pages} halaman</Text>
                         </HStack>
-                        <Text fontWeight="medium">
-                          {formatFileSize(item.file_size)}
-                        </Text>
-                      </HStack>
 
-                      {/* Download Button */}
-                      <Button
-                        colorScheme="blue"
-                        size="sm"
-                        w="100%"
-                        leftIcon={<DownloadIconFallback />}
-                        onClick={() => handleDownload(item.pdf_url, item.title + '.pdf')}
-                      >
-                        Download PDF
-                      </Button>
-                    </VStack>
-                  </CardBody>
-                </Card>
-              ))}
+                        {/* Download Button */}
+                        <Button
+                          colorScheme="blue"
+                          size="sm"
+                          w="100%"
+                          leftIcon={<DownloadIconFallback />}
+                          onClick={() => handleDownload(item.pdf_url, item.title + '.pdf')}
+                          isDisabled={!item.pdf_url}
+                        >
+                          {item.pdf_url ? 'Download PDF' : 'PDF Tidak Tersedia'}
+                        </Button>
+                      </VStack>
+                    </CardBody>
+                  </Card>
+                );
+              })}
             </SimpleGrid>
 
             {/* Pagination */}
@@ -492,15 +431,18 @@ export default function MakalahPage() {
             )}
 
             {/* Empty State */}
-            {filteredMakalah.length === 0 && (
+            {filteredMakalah.length === 0 && !loading && (
               <Box textAlign="center" py={10}>
                 <VStack spacing={4}>
                   <Icon as={FileIconFallback} boxSize={16} color="gray.400" />
                   <Text fontSize="xl" color="gray.500">
-                    Tidak ada makalah yang ditemukan
+                    {makalah.length === 0 ? 'Belum ada makalah tersedia' : 'Tidak ada makalah yang ditemukan'}
                   </Text>
                   <Text color="gray.400">
-                    Coba ubah kata kunci pencarian atau filter kategori
+                    {makalah.length === 0 
+                      ? 'Admin akan segera menambahkan makalah kesehatan' 
+                      : 'Coba ubah kata kunci pencarian atau filter kategori'
+                    }
                   </Text>
                 </VStack>
               </Box>

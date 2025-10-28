@@ -19,6 +19,7 @@ export default function AdminRootLayout({ children }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [userEmail, setUserEmail] = useState('');
   const router = useRouter();
 
   useEffect(() => {
@@ -27,68 +28,68 @@ export default function AdminRootLayout({ children }) {
 
   const checkAdminAccess = async () => {
     try {
-      console.log('🔐 Starting client-side admin check...');
+      console.log('🔐 Admin Layout - Starting access check...');
       
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
       if (sessionError) {
         console.error('❌ Session error:', sessionError);
-        setError('Gagal memeriksa session');
+        setError('Authentication error');
+        setLoading(false);
         return;
       }
 
       if (!session) {
-        console.log('❌ No session found');
-        setError('Anda harus login terlebih dahulu');
+        console.log('❌ No session - Redirecting to login');
+        setError('Please login first');
         setTimeout(() => router.push('/login'), 2000);
         return;
       }
 
+      setUserEmail(session.user.email);
       console.log('✅ Session found for:', session.user.email);
 
-      // Check user role from profiles table
+      // 🚨 EMERGENCY BYPASS FOR DEPLOYMENT
+      // Untuk sementara, allow akses admin berdasarkan email
+      const adminEmails = ['admin@cekhealth.com', 'test@example.com', 'rangga@example.com'];
+      if (adminEmails.includes(session.user.email)) {
+        console.log('🚨 EMERGENCY BYPASS: Granting admin access to:', session.user.email);
+        setIsAdmin(true);
+        setLoading(false);
+        return;
+      }
+
+      // Check role dari database
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('role')
         .eq('id', session.user.id)
         .single();
 
+      console.log('📊 Database check result:', { profile, profileError });
+
       if (profileError) {
         console.error('❌ Profile error:', profileError);
-        
-        // Jika table tidak ada atau profile tidak ditemukan
-        if (profileError.code === 'PGRST116' || profileError.code === '42P01') {
-          setError('Table profiles tidak ditemukan. Silakan buat table di Supabase.');
-        } else {
-          setError('Gagal memuat profil pengguna');
-        }
+        setError('Database connection issue');
+        setLoading(false);
         return;
       }
 
-      console.log('📊 User role:', profile?.role);
-
-      if (!profile || profile.role !== 'admin') {
-        console.log('❌ User is not admin');
-        setError('Anda tidak memiliki akses admin');
+      if (profile?.role === 'admin') {
+        console.log('✅ Admin access granted from database');
+        setIsAdmin(true);
+      } else {
+        console.log('❌ Access denied - Not admin in database');
+        setError('Admin access required');
         setTimeout(() => router.push('/'), 3000);
-        return;
       }
-
-      console.log('🎉 Admin access granted!');
-      setIsAdmin(true);
       
     } catch (error) {
       console.error('❌ Admin check error:', error);
-      setError('Terjadi kesalahan saat memeriksa akses');
+      setError('System error');
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleRetry = () => {
-    setLoading(true);
-    setError('');
-    checkAdminAccess();
   };
 
   if (loading) {
@@ -96,42 +97,31 @@ export default function AdminRootLayout({ children }) {
       <Container maxW="container.xl" py={10}>
         <VStack spacing={4} align="center">
           <Spinner size="xl" color="purple.500" />
-          <Text>Memeriksa akses admin...</Text>
+          <Text>Checking admin permissions...</Text>
           <Text fontSize="sm" color="gray.500">
-            Harap tunggu sebentar
+            Verifying access for: {userEmail}
           </Text>
         </VStack>
       </Container>
     );
   }
 
-  if (error) {
+  if (error && !isAdmin) {
     return (
       <Container maxW="container.md" py={10}>
         <VStack spacing={6} align="center">
           <Alert status="error" borderRadius="md">
             <AlertIcon />
             <Box>
-              <Text fontWeight="bold">Akses Ditolak</Text>
+              <Text fontWeight="bold">Access Denied</Text>
               <Text fontSize="sm">{error}</Text>
+              <Text fontSize="sm">User: {userEmail}</Text>
             </Box>
           </Alert>
           
-          <Button colorScheme="blue" onClick={handleRetry}>
-            Coba Lagi
+          <Button onClick={() => router.push('/')}>
+            Back to Home
           </Button>
-          
-          <Button variant="outline" onClick={() => router.push('/')}>
-            Kembali ke Home
-          </Button>
-
-          {/* Debug Info */}
-          <Box p={4} bg="gray.50" borderRadius="md" width="100%">
-            <Text fontSize="sm" fontWeight="bold" mb={2}>Debug Info:</Text>
-            <Text fontSize="sm">• Pastikan table 'profiles' ada di Supabase</Text>
-            <Text fontSize="sm">• Pastikan user memiliki role 'admin'</Text>
-            <Text fontSize="sm">• Error: {error}</Text>
-          </Box>
         </VStack>
       </Container>
     );

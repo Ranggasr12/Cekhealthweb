@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback } from 'react'; // TAMBAHKAN useCallback
+import { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Grid,
@@ -29,11 +29,11 @@ import {
   Alert,
   AlertIcon,
   Flex,
-  SimpleGrid, // TAMBAHKAN INI
+  SimpleGrid,
 } from '@chakra-ui/react';
-import { supabase } from '../../../lib/supabase';
-import AdminLayout from '../../../components/AdminLayout';
-import { FiTrash2, FiEdit, FiVideo, FiYoutube } from 'react-icons/fi';
+import { supabase } from '@/lib/supabase';
+import AdminLayout from '@/components/AdminLayout';
+import { FiTrash2, FiVideo, FiYoutube } from 'react-icons/fi';
 
 export default function VideoManagement() {
   const [videos, setVideos] = useState([]);
@@ -47,7 +47,6 @@ export default function VideoManagement() {
   const [submitting, setSubmitting] = useState(false);
   const toast = useToast();
 
-  // Pindahkan fetchVideos ke useCallback
   const fetchVideos = useCallback(async () => {
     setLoading(true);
     try {
@@ -69,11 +68,11 @@ export default function VideoManagement() {
     } finally {
       setLoading(false);
     }
-  }, [toast]); // Tambahkan toast sebagai dependency
+  }, [toast]);
 
   useEffect(() => {
     fetchVideos();
-  }, [fetchVideos]); // Tambahkan fetchVideos sebagai dependency
+  }, [fetchVideos]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -290,12 +289,18 @@ export default function VideoManagement() {
                                 </VStack>
                               </Td>
                               <Td>
-                                <Badge 
-                                  colorScheme={video.video_type === 'youtube' ? 'red' : 'blue'}
-                                  leftIcon={video.video_type === 'youtube' ? <FiYoutube /> : <FiVideo />}
-                                >
-                                  {video.video_type}
-                                </Badge>
+                                <HStack>
+                                  {video.video_type === 'youtube' ? (
+                                    <FiYoutube color="#FF0000" />
+                                  ) : (
+                                    <FiVideo color="#3182CE" />
+                                  )}
+                                  <Badge 
+                                    colorScheme={video.video_type === 'youtube' ? 'red' : 'blue'}
+                                  >
+                                    {video.video_type}
+                                  </Badge>
+                                </HStack>
                               </Td>
                               <Td>
                                 <Text fontSize="sm">
@@ -353,6 +358,11 @@ export default function VideoManagement() {
                           allowFullScreen
                         />
                       </Box>
+                      {video.description && (
+                        <Text fontSize="sm" color="gray.600" mt={2}>
+                          {video.description}
+                        </Text>
+                      )}
                     </Box>
                   ))}
                 </SimpleGrid>
