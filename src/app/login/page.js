@@ -1,113 +1,119 @@
-'use client'
-import { useState } from 'react'
+"use client";
+
+import { useState } from 'react';
 import {
   Box,
+  Container,
+  Heading,
+  Input,
   Button,
+  VStack,
+  Text,
   FormControl,
   FormLabel,
-  Input,
-  VStack,
-  Heading,
-  Text,
-  Alert,
-  AlertIcon,
-  Container,
-  Card,
-  CardBody,
+  Link,
   useToast,
-} from '@chakra-ui/react'
-import Link from 'next/link'
+  Alert,
+  AlertIcon
+} from '@chakra-ui/react';
+import { supabase } from '@/lib/supabase';
+import { useRouter } from 'next/navigation';
 
 export default function Login() {
-  const [email, setEmail] = useState('admin@cekhealth.com')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const toast = useToast()
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+  const toast = useToast();
 
-  const handleLogin = (e) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
 
-    // Simpan session
-    localStorage.setItem('adminEmail', email)
-    localStorage.setItem('isAdmin', 'true')
-    
-    // Show success message
-    toast({
-      title: 'Login Berhasil!',
-      description: 'Mengarahkan ke dashboard admin...',
-      status: 'success',
-      duration: 1000,
-    })
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
 
-    // Redirect ke halaman admin
-    setTimeout(() => {
-      window.location.href = '/admin'
-    }, 1500)
-  }
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "Login berhasil!",
+        status: "success",
+        duration: 3000,
+        isClosable: true,
+      });
+
+      router.push('/');
+      router.refresh();
+    } catch (error) {
+      toast({
+        title: "Login gagal",
+        description: error.message,
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <Container maxW="md" py={10}>
-      <Card>
-        <CardBody>
-          <VStack spacing={6}>
-            <Heading size="lg" textAlign="center">
-              Login Admin Cekhealth
-            </Heading>
-            
-            {error && (
-              <Alert status="error" borderRadius="md">
-                <AlertIcon />
-                {error}
-              </Alert>
-            )}
-
-            <FormControl as="form" onSubmit={handleLogin}>
-              <VStack spacing={4}>
-                <FormControl isRequired>
-                  <FormLabel>Email Admin</FormLabel>
-                  <Input
-                    type="email"
-                    placeholder="Masukkan email admin"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                </FormControl>
-
-                <Button
-                  type="submit"
-                  colorScheme="blue"
-                  width="full"
-                  isLoading={loading}
-                  loadingText="Sedang login..."
-                  size="lg"
-                >
-                  Login ke Dashboard
-                </Button>
-              </VStack>
+    <Container maxW="md" py={20}>
+      <Box p={8} shadow="md" borderWidth={1} borderRadius={8}>
+        <Heading mb={6} textAlign="center" color="purple.600">
+          Login
+        </Heading>
+        
+        <form onSubmit={handleLogin}>
+          <VStack spacing={4}>
+            <FormControl isRequired>
+              <FormLabel>Email</FormLabel>
+              <Input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="email@example.com"
+                size="lg"
+              />
             </FormControl>
-
-            <VStack width="full" spacing={3}>
-              <Button
-                onClick={() => window.location.href = '/admin'}
-                colorScheme="green"
-                width="full"
-                variant="outline"
-              >
-                Akses Dashboard Langsung
-              </Button>
-              
-              <Text textAlign="center" fontSize="sm" color="gray.600">
-                Atau{' '}
-                <Link href="/" style={{ color: '#3182CE', fontWeight: 'bold' }}>
-                  kembali ke beranda
-                </Link>
-              </Text>
-            </VStack>
+            
+            <FormControl isRequired>
+              <FormLabel>Password</FormLabel>
+              <Input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Masukkan password"
+                size="lg"
+              />
+            </FormControl>
+            
+            <Button
+              type="submit"
+              colorScheme="purple"
+              width="full"
+              size="lg"
+              isLoading={loading}
+              loadingText="Sedang login..."
+              mt={4}
+            >
+              Login
+            </Button>
           </VStack>
-        </CardBody>
-      </Card>
+        </form>
+
+        <Text mt={6} textAlign="center">
+          Belum punya akun?{' '}
+          <Link color="purple.500" href="/register" fontWeight="bold">
+            Daftar di sini
+          </Link>
+        </Text>
+      </Box>
     </Container>
-  )
+  );
 }
