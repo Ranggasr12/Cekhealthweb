@@ -11,7 +11,6 @@ import { useRouter } from 'next/router'
 import {
   FiHome,
   FiVideo,
-  FiFileText,
   FiHelpCircle,
   FiSettings
 } from 'react-icons/fi'
@@ -80,9 +79,6 @@ export default function Sidebar({ onClose, ...rest }) {
         </NavItem>
         <NavItem icon={FiVideo} href="/admin/videos">
           Kelola Video
-        </NavItem>
-        <NavItem icon={FiFileText} href="/admin/makalah">
-          Kelola Makalah
         </NavItem>
         <NavItem icon={FiHelpCircle} href="/admin/pertanyaan">
           Kelola Pertanyaan

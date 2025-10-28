@@ -1,531 +1,399 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback } from 'react'; // TAMBAHKAN useCallback
+import { useState, useEffect, useCallback } from 'react';
 import {
   Box,
-  Grid,
-  GridItem,
+  Container,
+  Heading,
+  Text,
+  VStack,
+  HStack,
   FormControl,
   FormLabel,
   Input,
+  Textarea,
   Button,
+  Switch,
   Card,
   CardBody,
-  Heading,
   useToast,
-  VStack,
-  HStack,
-  Text,
-  Switch,
-  Select,
-  Divider,
   Alert,
   AlertIcon,
-  Avatar,
-  Badge,
-  Tabs,
-  TabList,
-  TabPanels,
-  Tab,
-  TabPanel,
-  Flex,
+  Divider,
+  SimpleGrid,
 } from '@chakra-ui/react';
-import { supabase } from '../../../lib/supabase';
-import AdminLayout from '../../../components/AdminLayout';
+import { supabase } from '@/lib/supabase';
+import AdminLayout from '@/components/AdminLayout';
+
+// Default settings
+const defaultSettings = {
+  site_title: 'CekHealth',
+  site_description: 'Sistem Diagnosa Kesehatan Online',
+  maintenance_mode: false,
+  max_questions_per_user: 50,
+  contact_email: '',
+  admin_notification: true,
+};
 
 export default function Settings() {
-  const [activeTab, setActiveTab] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [profileData, setProfileData] = useState({
-    full_name: '',
-    email: '',
-    avatar_url: ''
-  });
-  const [appSettings, setAppSettings] = useState({
-    site_name: 'CekHealth',
-    site_description: 'Platform kesehatan terpercaya',
-    maintenance_mode: false,
-    allow_registrations: true,
-    max_file_size: 10,
-    supported_formats: 'pdf,mp4,jpg,png'
-  });
+  const [appSettings, setAppSettings] = useState(defaultSettings);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const toast = useToast();
-  const { user } = { user: { id: '1', email: 'admin@cekhealth.com', created_at: new Date().toISOString() } }; // Mock user
 
-  // Pindahkan fetchUserProfile ke useCallback
-  const fetchUserProfile = useCallback(async () => {
+  // Fetch settings dengan useCallback untuk menghindari infinite loop
+  const fetchSettings = useCallback(async () => {
+    setLoading(true);
     try {
       const { data, error } = await supabase
-        .from('users')
+        .from('app_settings')
         .select('*')
-        .eq('id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .single();
 
+      if (error) {
+        // Jika tabel tidak ada atau tidak ada data, gunakan default settings
+        if (error.code === 'PGRST116' || error.code === '42P01') {
+          console.log('Using default settings');
+          setAppSettings(defaultSettings);
+          return;
+        }
+        throw error;
+      }
+
       if (data) {
-        setProfileData({
-          full_name: data.full_name || '',
-          email: data.email || '',
-          avatar_url: data.avatar_url || ''
+        setAppSettings({
+          ...defaultSettings,
+          ...data
         });
       }
     } catch (error) {
-      console.error('Error fetching profile:', error);
+      console.error('Error fetching settings:', error);
+      // Gunakan default settings jika error
+      setAppSettings(defaultSettings);
+      toast({
+        title: 'Info',
+        description: 'Menggunakan pengaturan default',
+        status: 'info',
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setLoading(false);
     }
-  }, [user.id]); // Tambahkan user.id sebagai dependency
-
-  const fetchAppSettings = useCallback(async () => {
-    // In a real app, you'd fetch these from a settings table
-    // For now, we'll use default values
-    setAppSettings({
-      site_name: 'CekHealth',
-      site_description: 'Platform kesehatan terpercaya',
-      maintenance_mode: false,
-      allow_registrations: true,
-      max_file_size: 10,
-      supported_formats: 'pdf,mp4,jpg,png'
-    });
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
-    if (user) {
-      fetchUserProfile();
-    }
-    fetchAppSettings();
-  }, [user, fetchUserProfile, fetchAppSettings]); // Tambahkan dependencies
+    fetchSettings();
+  }, [fetchSettings]);
 
-  const handleProfileUpdate = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-
+  const handleSaveSettings = async () => {
+    setSaving(true);
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({
-          full_name: profileData.full_name,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', user.id);
+      // Cek apakah settings sudah ada
+      const { data: existingSettings } = await supabase
+        .from('app_settings')
+        .select('id')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
 
-      if (error) throw error;
+      let error;
+      
+      if (existingSettings?.id) {
+        // Update existing settings
+        const { error: updateError } = await supabase
+          .from('app_settings')
+          .update({
+            ...appSettings,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingSettings.id);
+        error = updateError;
+      } else {
+        // Insert new settings
+        const { error: insertError } = await supabase
+          .from('app_settings')
+          .insert([{
+            ...appSettings,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }]);
+        error = insertError;
+      }
+
+      if (error) {
+        // Jika tabel belum ada, tampilkan pesan
+        if (error.code === '42P01') {
+          toast({
+            title: 'Tabel belum dibuat',
+            description: 'Silakan buat tabel app_settings di Supabase terlebih dahulu',
+            status: 'warning',
+            duration: 6000,
+            isClosable: true,
+          });
+          return;
+        }
+        throw error;
+      }
 
       toast({
-        title: 'Profile updated!',
+        title: 'Berhasil',
+        description: 'Pengaturan berhasil disimpan',
         status: 'success',
         duration: 3000,
         isClosable: true,
       });
     } catch (error) {
+      console.error('Error saving settings:', error);
       toast({
-        title: 'Error updating profile',
-        description: error.message,
+        title: 'Error',
+        description: 'Gagal menyimpan pengaturan: ' + error.message,
         status: 'error',
         duration: 5000,
         isClosable: true,
       });
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
-  const handleAppSettingsUpdate = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+  const handleInputChange = (field, value) => {
+    setAppSettings(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
 
-    try {
-      // In a real app, you'd save these to a settings table
-      // For now, we'll just show a success message
-      
+  const handleSwitchChange = (field, isChecked) => {
+    setAppSettings(prev => ({
+      ...prev,
+      [field]: isChecked
+    }));
+  };
+
+  const resetToDefaults = () => {
+    if (confirm('Apakah Anda yakin ingin mengembalikan pengaturan ke default?')) {
+      setAppSettings(defaultSettings);
       toast({
-        title: 'Settings updated!',
+        title: 'Berhasil',
+        description: 'Pengaturan telah direset ke default',
         status: 'success',
         duration: 3000,
         isClosable: true,
       });
-    } catch (error) {
-      toast({
-        title: 'Error updating settings',
-        description: error.message,
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
-    } finally {
-      setLoading(false);
     }
   };
 
-  const handlePasswordReset = async () => {
-    setLoading(true);
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(user.email);
-      
-      if (error) throw error;
-
-      toast({
-        title: 'Password reset email sent!',
-        description: 'Check your email for reset instructions',
-        status: 'success',
-        duration: 5000,
-        isClosable: true,
-      });
-    } catch (error) {
-      toast({
-        title: 'Error sending reset email',
-        description: error.message,
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  if (loading) {
+    return (
+      <AdminLayout>
+        <Container maxW="container.xl" py={8}>
+          <Box textAlign="center">
+            <Text>Memuat pengaturan...</Text>
+          </Box>
+        </Container>
+      </AdminLayout>
+    );
+  }
 
   return (
     <AdminLayout>
-      <Box p={4}>
-        <Heading mb={6}>Settings</Heading>
+      <Container maxW="container.xl" py={8}>
+        <VStack spacing={8} align="stretch">
+          <Box>
+            <Heading size="lg" mb={2}>Pengaturan Aplikasi</Heading>
+            <Text color="gray.600">Kelola pengaturan umum aplikasi CekHealth</Text>
+          </Box>
 
-        <Tabs 
-          variant="enclosed" 
-          colorScheme="blue"
-          index={activeTab}
-          onChange={setActiveTab}
-        >
-          <TabList>
-            <Tab>Profile</Tab>
-            <Tab>App Settings</Tab>
-            <Tab>Security</Tab>
-            <Tab>About</Tab>
-          </TabList>
+          <Alert status="info" borderRadius="md">
+            <AlertIcon />
+            <Text fontSize="sm">
+              Perubahan pengaturan akan mempengaruhi seluruh pengguna aplikasi
+            </Text>
+          </Alert>
 
-          <TabPanels>
-            {/* Profile Settings */}
-            <TabPanel>
-              <Grid templateColumns={{ base: '1fr', lg: '2fr 1fr' }} gap={6}>
-                <GridItem>
-                  <Card>
-                    <CardBody>
-                      <Heading size="md" mb={4}>Profile Information</Heading>
-                      <form onSubmit={handleProfileUpdate}>
-                        <VStack spacing={4}>
-                          <FormControl>
-                            <FormLabel>Full Name</FormLabel>
-                            <Input
-                              value={profileData.full_name}
-                              onChange={(e) => setProfileData(prev => ({
-                                ...prev,
-                                full_name: e.target.value
-                              }))}
-                              placeholder="Your full name"
-                            />
-                          </FormControl>
+          <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={8}>
+            {/* General Settings */}
+            <Card>
+              <CardBody>
+                <Heading size="md" mb={6}>Pengaturan Umum</Heading>
+                <VStack spacing={6}>
+                  <FormControl>
+                    <FormLabel>Judul Situs</FormLabel>
+                    <Input
+                      value={appSettings.site_title}
+                      onChange={(e) => handleInputChange('site_title', e.target.value)}
+                      placeholder="CekHealth"
+                    />
+                  </FormControl>
 
-                          <FormControl>
-                            <FormLabel>Email</FormLabel>
-                            <Input
-                              value={profileData.email}
-                              isReadOnly
-                              bg="gray.50"
-                              placeholder="Your email"
-                            />
-                            <Text fontSize="sm" color="gray.600" mt={1}>
-                              Email cannot be changed
-                            </Text>
-                          </FormControl>
+                  <FormControl>
+                    <FormLabel>Deskripsi Situs</FormLabel>
+                    <Textarea
+                      value={appSettings.site_description}
+                      onChange={(e) => handleInputChange('site_description', e.target.value)}
+                      placeholder="Sistem Diagnosa Kesehatan Online"
+                      rows={3}
+                    />
+                  </FormControl>
 
-                          <Button
-                            type="submit"
-                            colorScheme="blue"
-                            isLoading={loading}
-                          >
-                            Update Profile
-                          </Button>
-                        </VStack>
-                      </form>
-                    </CardBody>
-                  </Card>
-                </GridItem>
+                  <FormControl>
+                    <FormLabel>Email Kontak</FormLabel>
+                    <Input
+                      type="email"
+                      value={appSettings.contact_email}
+                      onChange={(e) => handleInputChange('contact_email', e.target.value)}
+                      placeholder="admin@cekhealth.com"
+                    />
+                  </FormControl>
 
-                <GridItem>
-                  <Card>
-                    <CardBody>
-                      <Heading size="md" mb={4}>Account Overview</Heading>
-                      <VStack spacing={4} align="stretch">
-                        <HStack justify="space-between">
-                          <Text fontWeight="medium">Role</Text>
-                          <Badge colorScheme="green">Administrator</Badge>
-                        </HStack>
-                        
-                        <HStack justify="space-between">
-                          <Text fontWeight="medium">Status</Text>
-                          <Badge colorScheme="blue">Active</Badge>
-                        </HStack>
-                        
-                        <HStack justify="space-between">
-                          <Text fontWeight="medium">Member Since</Text>
-                          <Text fontSize="sm">
-                            {user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}
-                          </Text>
-                        </HStack>
+                  <FormControl>
+                    <FormLabel>Maksimal Pertanyaan per User</FormLabel>
+                    <Input
+                      type="number"
+                      value={appSettings.max_questions_per_user}
+                      onChange={(e) => handleInputChange('max_questions_per_user', parseInt(e.target.value) || 0)}
+                      min={1}
+                      max={100}
+                    />
+                  </FormControl>
+                </VStack>
+              </CardBody>
+            </Card>
 
-                        <Divider />
-
-                        <Alert status="info" borderRadius="md">
-                          <AlertIcon />
-                          <Text fontSize="sm">
-                            You have full administrative access to all features.
-                          </Text>
-                        </Alert>
-                      </VStack>
-                    </CardBody>
-                  </Card>
-                </GridItem>
-              </Grid>
-            </TabPanel>
-
-            {/* App Settings */}
-            <TabPanel>
-              <Card>
-                <CardBody>
-                  <Heading size="md" mb={4}>Application Settings</Heading>
-                  <form onSubmit={handleAppSettingsUpdate}>
-                    <VStack spacing={6} align="stretch">
-                      <Grid templateColumns={{ base: '1fr', md: '1fr 1fr' }} gap={6}>
-                        <FormControl>
-                          <FormLabel>Site Name</FormLabel>
-                          <Input
-                            value={appSettings.site_name}
-                            onChange={(e) => setAppSettings(prev => ({
-                              ...prev,
-                              site_name: e.target.value
-                            }))}
-                          />
-                        </FormControl>
-
-                        <FormControl>
-                          <FormLabel>Max File Size (MB)</FormLabel>
-                          <Input
-                            type="number"
-                            value={appSettings.max_file_size}
-                            onChange={(e) => setAppSettings(prev => ({
-                              ...prev,
-                              max_file_size: parseInt(e.target.value)
-                            }))}
-                          />
-                        </FormControl>
-                      </Grid>
-
-                      <FormControl>
-                        <FormLabel>Site Description</FormLabel>
-                        <Input
-                          value={appSettings.site_description}
-                          onChange={(e) => setAppSettings(prev => ({
-                            ...prev,
-                            site_description: e.target.value
-                          }))}
-                        />
-                      </FormControl>
-
-                      <FormControl>
-                        <FormLabel>Supported File Formats</FormLabel>
-                        <Input
-                          value={appSettings.supported_formats}
-                          onChange={(e) => setAppSettings(prev => ({
-                            ...prev,
-                            supported_formats: e.target.value
-                          }))}
-                          placeholder="pdf,mp4,jpg,png"
-                        />
-                      </FormControl>
-
-                      <Grid templateColumns={{ base: '1fr', md: '1fr 1fr' }} gap={6}>
-                        <FormControl display="flex" alignItems="center">
-                          <FormLabel mb="0" htmlFor="maintenance-mode">
-                            Maintenance Mode
-                          </FormLabel>
-                          <Switch
-                            id="maintenance-mode"
-                            isChecked={appSettings.maintenance_mode}
-                            onChange={(e) => setAppSettings(prev => ({
-                              ...prev,
-                              maintenance_mode: e.target.checked
-                            }))}
-                            colorScheme="blue"
-                          />
-                        </FormControl>
-
-                        <FormControl display="flex" alignItems="center">
-                          <FormLabel mb="0" htmlFor="allow-registrations">
-                            Allow User Registrations
-                          </FormLabel>
-                          <Switch
-                            id="allow-registrations"
-                            isChecked={appSettings.allow_registrations}
-                            onChange={(e) => setAppSettings(prev => ({
-                              ...prev,
-                              allow_registrations: e.target.checked
-                            }))}
-                            colorScheme="blue"
-                          />
-                        </FormControl>
-                      </Grid>
-
-                      <Button
-                        type="submit"
-                        colorScheme="blue"
-                        isLoading={loading}
-                        alignSelf="flex-start"
-                      >
-                        Save Settings
-                      </Button>
-                    </VStack>
-                  </form>
-                </CardBody>
-              </Card>
-            </TabPanel>
-
-            {/* Security Settings */}
-            <TabPanel>
-              <Grid templateColumns={{ base: '1fr', lg: '1fr 1fr' }} gap={6}>
-                <GridItem>
-                  <Card>
-                    <CardBody>
-                      <Heading size="md" mb={4}>Password & Security</Heading>
-                      <VStack spacing={4} align="stretch">
-                        <Alert status="warning" borderRadius="md">
-                          <AlertIcon />
-                          <Text fontSize="sm">
-                            Last password change: 30 days ago
-                          </Text>
-                        </Alert>
-
-                        <Button
-                          colorScheme="blue"
-                          variant="outline"
-                          onClick={handlePasswordReset}
-                          isLoading={loading}
-                        >
-                          Send Password Reset Email
-                        </Button>
-
-                        <Divider />
-
-                        <Heading size="sm">Session Management</Heading>
-                        <Text fontSize="sm" color="gray.600">
-                          Current session started: {new Date().toLocaleString()}
-                        </Text>
-                        
-                        <Button
-                          colorScheme="red"
-                          variant="outline"
-                          onClick={() => {/* signOut function */}}
-                        >
-                          Sign Out All Devices
-                        </Button>
-                      </VStack>
-                    </CardBody>
-                  </Card>
-                </GridItem>
-
-                <GridItem>
-                  <Card>
-                    <CardBody>
-                      <Heading size="md" mb={4}>Security Logs</Heading>
-                      <VStack spacing={3} align="stretch">
-                        <Box p={3} bg="gray.50" borderRadius="md">
-                          <Text fontSize="sm" fontWeight="medium">Login successful</Text>
-                          <Text fontSize="xs" color="gray.600">
-                            {new Date().toLocaleString()} • From Chrome, Windows
-                          </Text>
-                        </Box>
-                        
-                        <Box p={3} bg="gray.50" borderRadius="md">
-                          <Text fontSize="sm" fontWeight="medium">Password changed</Text>
-                          <Text fontSize="xs" color="gray.600">
-                            30 days ago • From your account
-                          </Text>
-                        </Box>
-
-                        <Button size="sm" variant="ghost" alignSelf="flex-start">
-                          View All Logs
-                        </Button>
-                      </VStack>
-                    </CardBody>
-                  </Card>
-                </GridItem>
-              </Grid>
-            </TabPanel>
-
-            {/* About */}
-            <TabPanel>
-              <Card>
-                <CardBody>
-                  <VStack spacing={6} align="stretch">
-                    <Box textAlign="center">
-                      <Heading size="lg" mb={2}>CekHealth Admin</Heading>
-                      <Text color="gray.600" fontSize="lg">
-                        Version 1.0.0
+            {/* System Settings */}
+            <Card>
+              <CardBody>
+                <Heading size="md" mb={6}>Pengaturan Sistem</Heading>
+                <VStack spacing={6}>
+                  <FormControl display="flex" alignItems="center" justifyContent="space-between">
+                    <Box>
+                      <FormLabel htmlFor="maintenance-mode" mb={0}>
+                        Maintenance Mode
+                      </FormLabel>
+                      <Text fontSize="sm" color="gray.600">
+                        Nonaktifkan akses pengguna ke aplikasi
                       </Text>
                     </Box>
+                    <Switch
+                      id="maintenance-mode"
+                      isChecked={appSettings.maintenance_mode}
+                      onChange={(e) => handleSwitchChange('maintenance_mode', e.target.checked)}
+                      colorScheme="red"
+                    />
+                  </FormControl>
 
-                    <Divider />
+                  <FormControl display="flex" alignItems="center" justifyContent="space-between">
+                    <Box>
+                      <FormLabel htmlFor="admin-notification" mb={0}>
+                        Notifikasi Admin
+                      </FormLabel>
+                      <Text fontSize="sm" color="gray.600">
+                        Aktifkan notifikasi untuk admin
+                      </Text>
+                    </Box>
+                    <Switch
+                      id="admin-notification"
+                      isChecked={appSettings.admin_notification}
+                      onChange={(e) => handleSwitchChange('admin_notification', e.target.checked)}
+                      colorScheme="blue"
+                    />
+                  </FormControl>
 
-                    <Grid templateColumns={{ base: '1fr', md: '1fr 1fr' }} gap={6}>
-                      <Box>
-                        <Heading size="sm" mb={3}>System Information</Heading>
-                        <VStack spacing={2} align="stretch">
-                          <HStack justify="space-between">
-                            <Text fontSize="sm">Framework</Text>
-                            <Badge>Next.js</Badge>
-                          </HStack>
-                          <HStack justify="space-between">
-                            <Text fontSize="sm">UI Library</Text>
-                            <Badge>Chakra UI</Badge>
-                          </HStack>
-                          <HStack justify="space-between">
-                            <Text fontSize="sm">Database</Text>
-                            <Badge colorScheme="green">Supabase</Badge>
-                          </HStack>
-                          <HStack justify="space-between">
-                            <Text fontSize="sm">Environment</Text>
-                            <Badge colorScheme="blue">Development</Badge>
-                          </HStack>
-                        </VStack>
-                      </Box>
+                  <Divider />
 
-                      <Box>
-                        <Heading size="sm" mb={3}>Support</Heading>
-                        <VStack spacing={3} align="stretch">
-                          <Text fontSize="sm">
-                            For technical support or questions, please contact:
-                          </Text>
-                          <Text fontSize="sm" fontWeight="medium">
-                            support@cekhealth.com
-                          </Text>
-                          <Button size="sm" colorScheme="blue" variant="outline">
-                            Documentation
-                          </Button>
-                        </VStack>
-                      </Box>
-                    </Grid>
+                  {/* Reset Section */}
+                  <Box w="full">
+                    <Heading size="sm" color="orange.600" mb={4}>
+                      Reset Pengaturan
+                    </Heading>
+                    <Button
+                      colorScheme="orange"
+                      variant="outline"
+                      onClick={resetToDefaults}
+                      w="full"
+                    >
+                      Reset ke Default
+                    </Button>
+                  </Box>
 
-                    <Alert status="info" borderRadius="md">
-                      <AlertIcon />
-                      <Box>
-                        <Text fontWeight="medium">Need help?</Text>
-                        <Text fontSize="sm">
-                          Check our documentation or contact our support team for assistance.
-                        </Text>
-                      </Box>
-                    </Alert>
-                  </VStack>
-                </CardBody>
-              </Card>
-            </TabPanel>
-          </TabPanels>
-        </Tabs>
-      </Box>
+                  {/* Danger Zone */}
+                  <Box w="full">
+                    <Heading size="sm" color="red.600" mb={4}>
+                      Zona Berbahaya
+                    </Heading>
+                    <VStack spacing={4} align="stretch">
+                      <Button
+                        colorScheme="red"
+                        variant="outline"
+                        onClick={() => {
+                          if (confirm('Apakah Anda yakin ingin mereset semua data?')) {
+                            toast({
+                              title: 'Fitur dalam pengembangan',
+                              status: 'info',
+                              duration: 3000,
+                            });
+                          }
+                        }}
+                      >
+                        Reset Semua Data
+                      </Button>
+                      
+                      <Button
+                        colorScheme="red"
+                        variant="outline"
+                        onClick={() => {
+                          if (confirm('Apakah Anda yakin ingin menghapus semua log?')) {
+                            toast({
+                              title: 'Fitur dalam pengembangan',
+                              status: 'info',
+                              duration: 3000,
+                            });
+                          }
+                        }}
+                      >
+                        Hapus Semua Log
+                      </Button>
+                    </VStack>
+                  </Box>
+                </VStack>
+              </CardBody>
+            </Card>
+          </SimpleGrid>
+
+          {/* Save Button */}
+          <Card>
+            <CardBody>
+              <HStack justify="space-between">
+                <Box>
+                  <Text fontWeight="bold">Simpan Perubahan</Text>
+                  <Text fontSize="sm" color="gray.600">
+                    Pastikan semua pengaturan sudah benar sebelum menyimpan
+                  </Text>
+                </Box>
+                <HStack spacing={4}>
+                  <Button
+                    variant="outline"
+                    onClick={resetToDefaults}
+                  >
+                    Reset
+                  </Button>
+                  <Button
+                    colorScheme="blue"
+                    isLoading={saving}
+                    onClick={handleSaveSettings}
+                    size="lg"
+                  >
+                    Simpan Pengaturan
+                  </Button>
+                </HStack>
+              </HStack>
+            </CardBody>
+          </Card>
+        </VStack>
+      </Container>
     </AdminLayout>
   );
 }

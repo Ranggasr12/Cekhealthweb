@@ -29,13 +29,23 @@ import {
   Alert,
   AlertIcon,
   SimpleGrid,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  ModalCloseButton,
+  useDisclosure,
+  FormHelperText,
 } from '@chakra-ui/react';
 import { supabase } from '@/lib/supabase';
 import AdminLayout from '@/components/AdminLayout';
-import { FiTrash2, FiHelpCircle, FiEdit } from 'react-icons/fi';
+import { FiTrash2, FiHelpCircle, FiEdit, FiPlus, FiX } from 'react-icons/fi';
 
 export default function PertanyaanManagement() {
   const [pertanyaan, setPertanyaan] = useState([]);
+  const [jenisPenyakit, setJenisPenyakit] = useState([]);
   const [formData, setFormData] = useState({
     jenis_penyakit: '',
     pertanyaan_text: '',
@@ -43,20 +53,12 @@ export default function PertanyaanManagement() {
     indikasi: '',
     tingkat_keparahan: 'rendah'
   });
+  const [newPenyakit, setNewPenyakit] = useState('');
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [loadingPenyakit, setLoadingPenyakit] = useState(false);
+  const { isOpen, onOpen, onClose } = useDisclosure();
   const toast = useToast();
-
-  const penyakitOptions = [
-    'Diabetes',
-    'Hipertensi', 
-    'Jantung',
-    'Kolesterol',
-    'Asma',
-    'Gastrointestinal',
-    'Mental Health',
-    'Umum'
-  ];
 
   const tingkatKeparahanOptions = [
     { value: 'rendah', label: 'Rendah', color: 'green' },
@@ -64,6 +66,7 @@ export default function PertanyaanManagement() {
     { value: 'tinggi', label: 'Tinggi', color: 'red' }
   ];
 
+  // Fetch data pertanyaan dan jenis penyakit
   const fetchPertanyaan = useCallback(async () => {
     setLoading(true);
     try {
@@ -87,9 +90,139 @@ export default function PertanyaanManagement() {
     }
   }, [toast]);
 
+  const fetchJenisPenyakit = useCallback(async () => {
+    setLoadingPenyakit(true);
+    try {
+      const { data, error } = await supabase
+        .from('jenis_penyakit')
+        .select('*')
+        .order('nama_penyakit', { ascending: true });
+      
+      if (error) throw error;
+      setJenisPenyakit(data || []);
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Gagal memuat data jenis penyakit',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setLoadingPenyakit(false);
+    }
+  }, [toast]);
+
   useEffect(() => {
     fetchPertanyaan();
-  }, [fetchPertanyaan]);
+    fetchJenisPenyakit();
+  }, [fetchPertanyaan, fetchJenisPenyakit]);
+
+  // Handler untuk menambah jenis penyakit baru
+  const handleAddPenyakit = async () => {
+    if (!newPenyakit.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Nama penyakit tidak boleh kosong',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('jenis_penyakit')
+        .insert([{ 
+          nama_penyakit: newPenyakit.trim(),
+          created_at: new Date().toISOString()
+        }]);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Berhasil',
+        description: 'Jenis penyakit berhasil ditambahkan',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+
+      setNewPenyakit('');
+      onClose();
+      fetchJenisPenyakit();
+    } catch (error) {
+      if (error.code === '23505') {
+        toast({
+          title: 'Error',
+          description: 'Jenis penyakit sudah ada',
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        });
+      } else {
+        toast({
+          title: 'Error',
+          description: error.message,
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        });
+      }
+    }
+  };
+
+  // Handler untuk menghapus jenis penyakit
+  const handleDeletePenyakit = async (id, namaPenyakit) => {
+    // Cek apakah ada pertanyaan yang menggunakan penyakit ini
+    const pertanyaanTerpakai = pertanyaan.filter(p => p.jenis_penyakit === namaPenyakit);
+    
+    if (pertanyaanTerpakai.length > 0) {
+      toast({
+        title: 'Tidak dapat menghapus',
+        description: `Terdapat ${pertanyaanTerpakai.length} pertanyaan yang menggunakan penyakit ini. Hapus atau ubah pertanyaan tersebut terlebih dahulu.`,
+        status: 'error',
+        duration: 6000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    if (!confirm(`Apakah Anda yakin ingin menghapus penyakit "${namaPenyakit}"?`)) return;
+
+    try {
+      const { error } = await supabase
+        .from('jenis_penyakit')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Berhasil',
+        description: 'Jenis penyakit berhasil dihapus',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+
+      fetchJenisPenyakit();
+      
+      // Reset form jika penyakit yang dihapus sedang dipilih
+      if (formData.jenis_penyakit === namaPenyakit) {
+        setFormData(prev => ({ ...prev, jenis_penyakit: '' }));
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error.message,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -98,6 +231,10 @@ export default function PertanyaanManagement() {
     try {
       if (!formData.pertanyaan_text.trim()) {
         throw new Error('Pertanyaan tidak boleh kosong');
+      }
+
+      if (!formData.jenis_penyakit) {
+        throw new Error('Jenis penyakit harus dipilih');
       }
 
       const { error } = await supabase
@@ -190,6 +327,55 @@ export default function PertanyaanManagement() {
             </Text>
           </Alert>
 
+          {/* Kelola Jenis Penyakit Section */}
+          <Card>
+            <CardBody>
+              <HStack justify="space-between" mb={4}>
+                <Heading size="md">Kelola Jenis Penyakit</Heading>
+                <Button
+                  leftIcon={<FiPlus />}
+                  colorScheme="green"
+                  size="sm"
+                  onClick={onOpen}
+                >
+                  Tambah Penyakit
+                </Button>
+              </HStack>
+
+              {jenisPenyakit.length === 0 ? (
+                <Box textAlign="center" py={4}>
+                  <Text color="gray.500">Belum ada jenis penyakit</Text>
+                </Box>
+              ) : (
+                <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={3}>
+                  {jenisPenyakit.map((penyakit) => (
+                    <Box
+                      key={penyakit.id}
+                      p={3}
+                      border="1px"
+                      borderColor="gray.200"
+                      borderRadius="md"
+                      bg="white"
+                    >
+                      <HStack justify="space-between">
+                        <Text fontWeight="medium">{penyakit.nama_penyakit}</Text>
+                        <IconButton
+                          icon={<FiX />}
+                          size="sm"
+                          colorScheme="red"
+                          variant="ghost"
+                          onClick={() => handleDeletePenyakit(penyakit.id, penyakit.nama_penyakit)}
+                          aria-label="Hapus penyakit"
+                          isDisabled={loadingPenyakit}
+                        />
+                      </HStack>
+                    </Box>
+                  ))}
+                </SimpleGrid>
+              )}
+            </CardBody>
+          </Card>
+
           <Grid templateColumns={{ base: '1fr', lg: '1fr 1fr' }} gap={6}>
             {/* Add Pertanyaan Form */}
             <GridItem>
@@ -205,12 +391,15 @@ export default function PertanyaanManagement() {
                           onChange={(e) => setFormData(prev => ({ ...prev, jenis_penyakit: e.target.value }))}
                           placeholder="Pilih jenis penyakit"
                         >
-                          {penyakitOptions.map((penyakit) => (
-                            <option key={penyakit} value={penyakit}>
-                              {penyakit}
+                          {jenisPenyakit.map((penyakit) => (
+                            <option key={penyakit.id} value={penyakit.nama_penyakit}>
+                              {penyakit.nama_penyakit}
                             </option>
                           ))}
                         </Select>
+                        <FormHelperText>
+                          Jika penyakit tidak ada, tambahkan terlebih dahulu di section Kelola Jenis Penyakit
+                        </FormHelperText>
                       </FormControl>
 
                       <FormControl isRequired>
@@ -355,15 +544,15 @@ export default function PertanyaanManagement() {
               <CardBody>
                 <Heading size="md" mb={4}>Statistik per Jenis Penyakit</Heading>
                 <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={4}>
-                  {penyakitOptions.map((penyakit) => {
-                    const count = pertanyaan.filter(p => p.jenis_penyakit === penyakit).length;
+                  {jenisPenyakit.map((penyakit) => {
+                    const count = pertanyaan.filter(p => p.jenis_penyakit === penyakit.nama_penyakit).length;
                     if (count === 0) return null;
                     
                     return (
-                      <Card key={penyakit} variant="outline">
+                      <Card key={penyakit.id} variant="outline">
                         <CardBody>
                           <VStack spacing={2}>
-                            <Badge colorScheme="blue">{penyakit}</Badge>
+                            <Badge colorScheme="blue">{penyakit.nama_penyakit}</Badge>
                             <Text fontSize="2xl" fontWeight="bold">{count}</Text>
                             <Text fontSize="sm" color="gray.600">Pertanyaan</Text>
                           </VStack>
@@ -377,6 +566,46 @@ export default function PertanyaanManagement() {
           )}
         </VStack>
       </Box>
+
+      {/* Modal Tambah Penyakit */}
+      <Modal isOpen={isOpen} onClose={onClose}>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Tambah Jenis Penyakit Baru</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <FormControl>
+              <FormLabel>Nama Penyakit</FormLabel>
+              <Input
+                value={newPenyakit}
+                onChange={(e) => setNewPenyakit(e.target.value)}
+                placeholder="Masukkan nama penyakit baru"
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddPenyakit();
+                  }
+                }}
+              />
+              <FormHelperText>
+                Contoh: Diabetes, Hipertensi, Jantung, dll.
+              </FormHelperText>
+            </FormControl>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={onClose}>
+              Batal
+            </Button>
+            <Button 
+              colorScheme="blue" 
+              onClick={handleAddPenyakit}
+              leftIcon={<FiPlus />}
+            >
+              Tambah
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </AdminLayout>
   );
 }

@@ -34,11 +34,7 @@ export default function AdminDashboard() {
       const { data: { session } } = await supabase.auth.getSession();
       setUser(session?.user);
 
-      // Load basic stats
-      const { count: makalahCount } = await supabase
-        .from('makalah')
-        .select('*', { count: 'exact', head: true });
-
+      // Load basic stats - HAPUS MAKALAH
       const { count: videoCount } = await supabase
         .from('videos')
         .select('*', { count: 'exact', head: true });
@@ -47,10 +43,20 @@ export default function AdminDashboard() {
         .from('pertanyaan')
         .select('*', { count: 'exact', head: true });
 
+      // Stats untuk user dan diagnosa
+      const { count: userCount } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true });
+
+      const { count: diagnosaCount } = await supabase
+        .from('hasil_diagnosa')
+        .select('*', { count: 'exact', head: true });
+
       setStats({
-        makalah: makalahCount || 0,
         videos: videoCount || 0,
-        pertanyaan: pertanyaanCount || 0
+        pertanyaan: pertanyaanCount || 0,
+        users: userCount || 0,
+        diagnosa: diagnosaCount || 0
       });
     };
 
@@ -85,13 +91,23 @@ export default function AdminDashboard() {
         </Alert>
 
         {/* Statistics */}
-        <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6}>
+        <SimpleGrid columns={{ base: 1, md: 4 }} spacing={6}>
           <Card>
             <CardHeader>
               <Stat>
-                <StatLabel>Makalah</StatLabel>
-                <StatNumber>{stats.makalah}</StatNumber>
-                <StatHelpText>Health documents</StatHelpText>
+                <StatLabel>Users</StatLabel>
+                <StatNumber>{stats.users}</StatNumber>
+                <StatHelpText>Registered users</StatHelpText>
+              </Stat>
+            </CardHeader>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <Stat>
+                <StatLabel>Diagnosa</StatLabel>
+                <StatNumber>{stats.diagnosa}</StatNumber>
+                <StatHelpText>Health checks</StatHelpText>
               </Stat>
             </CardHeader>
           </Card>
@@ -118,15 +134,7 @@ export default function AdminDashboard() {
         </SimpleGrid>
 
         {/* Admin Actions */}
-        <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={4}>
-          <Button 
-            colorScheme="blue" 
-            onClick={() => router.push('/admin/makalah')}
-            height="100px"
-            fontSize="lg"
-          >
-            📚 Manage Makalah
-          </Button>
+        <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={4}>
           <Button 
             colorScheme="blue" 
             onClick={() => router.push('/admin/pertanyaan')}
@@ -142,6 +150,22 @@ export default function AdminDashboard() {
             fontSize="lg"
           >
             🎥 Manage Videos
+          </Button>
+          <Button 
+            colorScheme="blue" 
+            onClick={() => router.push('/admin/users')}
+            height="100px"
+            fontSize="lg"
+          >
+            👥 Manage Users
+          </Button>
+          <Button 
+            colorScheme="blue" 
+            onClick={() => router.push('/admin/diagnosa')}
+            height="100px"
+            fontSize="lg"
+          >
+            📊 View Diagnosa
           </Button>
           <Button 
             colorScheme="blue" 
