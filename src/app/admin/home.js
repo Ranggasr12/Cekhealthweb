@@ -23,8 +23,8 @@ import {
   Alert,
   AlertIcon,
 } from '@chakra-ui/react';
-import { supabase } from '../../../lib/supabase';
-import AdminLayout from '../../../components/AdminLayout';
+import { supabase } from '../../lib/supabase';
+import AdminLayout from '../../components/AdminLayout';
 import { FiSave, FiEye, FiUpload } from 'react-icons/fi';
 
 export default function EditHome() {

@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+"use client"
+import { useState, useEffect, use } from 'react'
 import {
   Box,
   Grid,
