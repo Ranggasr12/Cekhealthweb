@@ -240,7 +240,7 @@ export default function AdminDashboard() {
                   bgGradient="linear(to-r, purple.600, pink.500)"
                   bgClip="text"
                 >
-                 Dashboard Admin
+                  🎉 Dashboard Admin
                 </Heading>
                 <Text color="gray.600" fontSize={{ base: "md", md: "lg" }}>
                   Selamat datang di HealthCheck Admin Panel

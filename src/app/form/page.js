@@ -157,20 +157,18 @@ export default function FormPage() {
   const fetchMateriPenyakit = async (penyakitNames) => {
     setLoadingMateri(true);
     try {
-      // HANYA AMBIL VIDEO, HAPUS MAKALAH
       const { data, error } = await supabase
         .from('materi_penyakit')
         .select('*')
         .in('nama_penyakit', penyakitNames)
-        .eq('jenis_materi', 'video'); // FILTER HANYA VIDEO
+        .eq('jenis_materi', 'video');
       
       if (error) throw error;
 
-      // Group materials by disease name - HANYA VIDEO
       const groupedMateri = {};
       penyakitNames.forEach(penyakit => {
         groupedMateri[penyakit] = {
-          videos: [] // HAPUS MAKALAH
+          videos: []
         };
       });
 
@@ -178,7 +176,6 @@ export default function FormPage() {
         if (materi.jenis_materi === 'video' && groupedMateri[materi.nama_penyakit]) {
           groupedMateri[materi.nama_penyakit].videos.push(materi);
         }
-        // HAPUS BAGIAN MAKALAH
       });
 
       setMateriPenyakit(groupedMateri);
@@ -206,7 +203,6 @@ export default function FormPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Validasi apakah semua pertanyaan sudah dijawab
     const unansweredQuestions = pertanyaan.filter(q => !jawaban[q.id]);
     if (unansweredQuestions.length > 0) {
       toast({
@@ -221,7 +217,6 @@ export default function FormPage() {
     console.log("Form submitted:", { formData, jawaban });
     setShowResults(true);
     
-    // Hitung hasil dan ambil materi terkait
     const results = calculateResults();
     const detectedDiseaseNames = results.detectedDiseases
       .filter(disease => disease.name !== "Tidak Terdeteksi Penyakit Serius")
@@ -231,7 +226,6 @@ export default function FormPage() {
       await fetchMateriPenyakit(detectedDiseaseNames);
     }
 
-    // Simpan hasil ke database
     try {
       const { error } = await supabase
         .from('hasil_diagnosa')
@@ -256,7 +250,9 @@ export default function FormPage() {
     const scores = {};
     const penyakitMap = {};
     
-    // Group questions by disease type and calculate scores
+    // Kumpulkan semua saran dari pertanyaan yang dijawab "ya"
+    const semuaSaran = [];
+    
     pertanyaan.forEach(question => {
       const penyakit = question.jenis_penyakit;
       if (!scores[penyakit]) {
@@ -267,6 +263,14 @@ export default function FormPage() {
       const jawabanValue = jawaban[question.id];
       if (jawabanValue === 'ya') {
         scores[penyakit] += 1;
+        
+        // Kumpulkan saran jika ada dan jawaban "ya"
+        if (question.saran) {
+          semuaSaran.push({
+            saran: question.saran,
+            penyakit: penyakit
+          });
+        }
       }
       
       penyakitMap[penyakit].push({
@@ -284,7 +288,10 @@ export default function FormPage() {
       const totalQuestions = penyakitMap[penyakit].length;
       const percentage = (score / totalQuestions) * 100;
       
-      if (percentage >= 50) { // Jika 50% atau lebih jawaban "ya"
+      if (percentage >= 50) {
+        // Filter saran untuk penyakit ini saja
+        const saranPenyakit = semuaSaran.filter(s => s.penyakit === penyakit).map(s => s.saran);
+        
         detectedDiseases.push({
           name: penyakit,
           confidence: percentage >= 70 ? "Tinggi" : "Sedang",
@@ -292,6 +299,7 @@ export default function FormPage() {
           total: totalQuestions,
           percentage: percentage,
           questions: penyakitMap[penyakit],
+          saran: saranPenyakit, // TAMBAHKAN SARAN DI SINI
           penanganan: getPenanganan(penyakit, percentage),
           rekomendasi: getRekomendasi(penyakit, percentage)
         });
@@ -307,6 +315,7 @@ export default function FormPage() {
         total: 0,
         percentage: 0,
         questions: [],
+        saran: [],
         penanganan: [
           "Teruskan pola hidup sehat yang sudah Anda jalani",
           "Monitor kesehatan secara berkala",
@@ -462,6 +471,8 @@ ${results.detectedDiseases.map(disease => `
 ${disease.name.toUpperCase()}
 - Status: ${disease.confidence}
 
+${disease.saran.length > 0 ? `Saran Khusus:\n${disease.saran.map(saran => `  💡 ${saran}`).join('\n')}\n` : ''}
+
 Penanganan Segera:
 ${disease.penanganan.map(item => `  • ${item}`).join('\n')}
 
@@ -557,6 +568,23 @@ www.cekhealth.com
       doc.setFontSize(10);
       doc.text(`Status: ${disease.confidence}`, 20, yPosition);
       yPosition += 10;
+      
+      // TAMBAHKAN SARAN KE PDF
+      if (disease.saran.length > 0) {
+        doc.text('SARAN KHUSUS:', 20, yPosition);
+        yPosition += 5;
+        
+        disease.saran.forEach((saran, saranIndex) => {
+          if (yPosition > 270) {
+            doc.addPage();
+            yPosition = 20;
+          }
+          doc.text(`  💡 ${saran}`, 25, yPosition);
+          yPosition += 5;
+        });
+        
+        yPosition += 5;
+      }
       
       doc.text('PENANGANAN SEGERA:', 20, yPosition);
       yPosition += 5;
@@ -660,14 +688,10 @@ www.cekhealth.com
     </Card>
   );
 
-  // HAPUS KOMPONEN MAKALAHCARD
-  // const MakalahCard = ({ makalah }) => ( ... )
-
   // Komponen untuk menampilkan materi pembelajaran - HANYA VIDEO
   const MateriSection = ({ penyakit }) => {
     const materi = materiPenyakit[penyakit.name] || { videos: [] };
     
-    // HANYA TAMPILKAN JIKA ADA VIDEO
     if (materi.videos.length === 0) {
       return null;
     }
@@ -678,7 +702,6 @@ www.cekhealth.com
           📚 Video Edukasi Tentang {penyakit.name}
         </Heading>
         
-        {/* HANYA VIDEO SECTION */}
         <Box>
           <HStack mb={3}>
             <Icon as={VideoIcon} w={5} h={5} color="red.500" />
@@ -692,8 +715,6 @@ www.cekhealth.com
             ))}
           </SimpleGrid>
         </Box>
-        
-        {/* HAPUS SELURUH BAGIAN MAKALAH */}
       </Box>
     );
   };
@@ -712,6 +733,7 @@ www.cekhealth.com
     );
   }
 
+  // PERBAIKAN: renderQuestion TANPA tulisan ikon lampu
   const renderQuestion = (question, index) => (
     <FormControl key={question.id} mb={6} isRequired>
       <FormLabel fontSize="lg" fontWeight="medium" mb={4}>
@@ -730,15 +752,12 @@ www.cekhealth.com
           </Radio>
         </Stack>
       </RadioGroup>
-      {question.saran && (
-        <Text fontSize="sm" color="gray.600" mt={2}>
-          💡 {question.saran}
-        </Text>
-      )}
+      
+      {/* TULISAN IKON LAMPU DIHAPUS DARI SINI */}
     </FormControl>
   );
 
-  // TAMPILAN HASIL ANALISIS
+  // TAMPILAN HASIL ANALISIS - DENGAN SARAN BARU
   if (showResults) {
     const results = calculateResults();
 
@@ -793,6 +812,22 @@ www.cekhealth.com
                             {disease.confidence === "Tinggi" ? "Prioritas Tinggi" : disease.confidence === "Sedang" ? "Perlu Perhatian" : "Kondisi Baik"}
                           </Badge>
                         </HStack>
+
+                        {/* PERBAIKAN: TAMBAHKAN SARAN DI SINI */}
+                        {disease.saran.length > 0 && (
+                          <Box mb={4}>
+                            <Text fontWeight="bold" color="gray.700" mb={2}>
+                              💡 Saran Khusus:
+                            </Text>
+                            <VStack spacing={2} align="start">
+                              {disease.saran.map((saran, saranIndex) => (
+                                <Text key={saranIndex} color="gray.600">
+                                  • {saran}
+                                </Text>
+                              ))}
+                            </VStack>
+                          </Box>
+                        )}
                         
                         <Box mb={4}>
                           <Text fontWeight="bold" color="gray.700" mb={2}>

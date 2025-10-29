@@ -21,16 +21,10 @@ import {
   useDisclosure,
   Avatar,
   SkeletonCircle,
-  SkeletonText,
-  useToast,
-  Menu,
-  MenuButton,
-  MenuList,
-  MenuItem,
-  MenuDivider
+  SkeletonText
 } from '@chakra-ui/react';
 import { useRouter, usePathname } from 'next/navigation';
-import { getProfile, getSession, authSignOut } from '@/lib/supabase';
+import { supabase, getProfile, getSession } from '@/lib/supabase';
 import { 
   FiHome, 
   FiHelpCircle, 
@@ -40,9 +34,7 @@ import {
   FiUser,
   FiArrowLeft,
   FiBarChart2,
-  FiMenu,
-  FiEdit,
-  FiChevronDown
+  FiMenu
 } from 'react-icons/fi';
 import { useEffect, useState } from 'react';
 
@@ -54,7 +46,6 @@ export default function AdminLayout({ children }) {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const toast = useToast();
   
   const sidebarBg = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
@@ -69,24 +60,12 @@ export default function AdminLayout({ children }) {
   const loadUserData = async () => {
     try {
       setLoading(true);
-      const { data: { session }, error: sessionError } = await getSession();
-      
-      if (sessionError) {
-        console.error('Session error:', sessionError);
-        return;
-      }
-
+      const { data: { session } } = await getSession();
       setUser(session?.user);
 
       if (session?.user) {
-        const { data: profileData, error: profileError } = await getProfile(session.user.id);
-        
-        if (profileError) {
-          console.error('Profile error:', profileError);
-          return;
-        }
-
-        if (profileData) {
+        const { data: profileData, error } = await getProfile(session.user.id);
+        if (!error && profileData) {
           setProfile(profileData);
         }
       }
@@ -126,204 +105,22 @@ export default function AdminLayout({ children }) {
 
   const handleLogout = async () => {
     try {
-      const { error } = await authSignOut();
-      if (error) throw error;
-      
-      toast({
-        title: 'Berhasil logout',
-        status: 'success',
-        duration: 2000,
-        isClosable: true,
-      });
-      
+      await supabase.auth.signOut();
       router.push('/');
     } catch (error) {
       console.error('Logout error:', error);
-      toast({
-        title: 'Error',
-        description: 'Gagal logout',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
     }
   };
 
   const isActive = (href) => mounted && pathname === href;
 
-  // Komponen User Menu untuk pojok kanan atas - FIXED untuk hydration
-  const UserMenu = () => {
-    if (!mounted || loading) {
-      return (
-        <HStack spacing={3}>
-          <SkeletonCircle size="8" />
-          <SkeletonText noOfLines={1} width="100px" />
-        </HStack>
-      );
-    }
-
-    if (!user) {
-      return (
-        <Button
-          size="sm"
-          colorScheme="purple"
-          variant="outline"
-          leftIcon={<Icon as={FiUser} />}
-          onClick={() => router.push('/login')}
-        >
-          Login
-        </Button>
-      );
-    }
-
-    const displayName = profile?.full_name || user.email?.split('@')[0] || 'User';
-
-    return (
-      <Menu>
-        <MenuButton
-          as={Button}
-          rightIcon={<Icon as={FiChevronDown} />}
-          variant="ghost"
-          px={3}
-          py={2}
-          _hover={{ bg: 'gray.100' }}
-          _expanded={{ bg: 'gray.100' }}
-        >
-          <HStack spacing={2}>
-            <Avatar
-              size="sm"
-              name={displayName}
-              src={profile?.avatar_url || ''}
-              bg="purple.500"
-              color="white"
-              border="2px solid"
-              borderColor="purple.300"
-            />
-            <Box display={{ base: "none", md: "block" }}>
-              <Text fontSize="sm" fontWeight="medium" color="gray.700">
-                {displayName}
-              </Text>
-            </Box>
-          </HStack>
-        </MenuButton>
-        <MenuList>
-          <Box px={3} py={2}>
-            <Text fontSize="sm" fontWeight="medium">
-              {displayName}
-            </Text>
-            <Text fontSize="xs" color="gray.600">
-              {user.email}
-            </Text>
-          </Box>
-          <MenuDivider />
-          <MenuItem 
-            icon={<Icon as={FiUser} />}
-            onClick={() => router.push('/profile')}
-          >
-            Your profile
-          </MenuItem>
-          <MenuDivider />
-          <MenuItem 
-            icon={<Icon as={FiLogOut} />}
-            onClick={handleLogout}
-            color="red.500"
-          >
-            Sign out
-          </MenuItem>
-        </MenuList>
-      </Menu>
-    );
-  };
-
-  // Komponen Header untuk pojok kanan atas - FIXED untuk hydration
-  const AdminHeader = () => {
-    const getPageTitle = (path) => {
-      const titles = {
-        '/admin/dashboard': 'Dashboard',
-        '/admin/pertanyaan': 'Kelola Pertanyaan',
-        '/admin/videos': 'Kelola Video',
-        '/admin/settings': 'Pengaturan'
-      };
-      return titles[path] || 'Admin Panel';
-    };
-
-    // Date formatting yang konsisten antara server dan client
-    const [currentDate, setCurrentDate] = useState('');
-    const [currentTime, setCurrentTime] = useState('');
-
-    useEffect(() => {
-      if (mounted) {
-        const now = new Date();
-        setCurrentDate(now.toLocaleDateString('id-ID', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric'
-        }));
-        setCurrentTime(now.toLocaleTimeString('id-ID', {
-          hour: '2-digit',
-          minute: '2-digit'
-        }));
-      }
-    }, [mounted]);
-
-    return (
-      <Box
-        position="fixed"
-        top={0}
-        right={0}
-        left={{ base: 0, md: "280px" }}
-        bg="white"
-        borderBottom="1px"
-        borderColor="gray.200"
-        px={{ base: 4, md: 8 }}
-        py={4}
-        zIndex={900}
-        shadow="sm"
-      >
-        <Flex justify="space-between" align="center">
-          {/* Page Title */}
-          <Box>
-            <Text fontSize="xl" fontWeight="bold" color="gray.800">
-              {getPageTitle(pathname)}
-            </Text>
-            <Text fontSize="sm" color="gray.600">
-              HealthCheck Admin Panel
-            </Text>
-          </Box>
-
-          {/* User Menu di pojok kanan */}
-          <HStack spacing={4}>
-            {/* Info Tanggal - FIXED untuk hydration */}
-            {mounted && (
-              <Box 
-                display={{ base: "none", md: "block" }}
-                textAlign="right"
-              >
-                <Text fontSize="sm" color="gray.600" fontWeight="medium">
-                  {currentDate}
-                </Text>
-                <Text fontSize="xs" color="gray.500">
-                  {currentTime}
-                </Text>
-              </Box>
-            )}
-
-            {/* User Menu dengan gambar profil */}
-            <UserMenu />
-          </HStack>
-        </Flex>
-      </Box>
-    );
-  };
-
   const UserProfileSection = () => {
-    if (!mounted || loading) {
+    if (loading) {
       return (
-        <HStack spacing={3} p={3} borderRadius="md" bg="gray.50">
-          <SkeletonCircle size="10" />
+        <HStack spacing={3} p={2} borderRadius="md" bg="gray.50">
+          <SkeletonCircle size="8" />
           <Box flex="1">
-            <SkeletonText noOfLines={2} spacing="2" />
+            <SkeletonText noOfLines={2} spacing="1" />
           </Box>
         </HStack>
       );
@@ -344,14 +141,11 @@ export default function AdminLayout({ children }) {
       );
     }
 
-    const displayName = profile?.full_name || user.email?.split('@')[0] || 'User';
-    const displayEmail = user.email;
-
     return (
-      <VStack 
+      <HStack 
         spacing={3} 
-        p={3} 
-        borderRadius="lg" 
+        p={2} 
+        borderRadius="md" 
         bg="purple.50"
         border="1px"
         borderColor="purple.200"
@@ -359,86 +153,46 @@ export default function AdminLayout({ children }) {
         onClick={() => router.push('/profile')}
         _hover={{
           bg: 'purple.100',
-          transform: 'translateY(-2px)',
-          shadow: 'md'
+          transform: 'translateY(-1px)',
+          shadow: 'sm'
         }}
-        transition="all 0.3s ease"
+        transition="all 0.2s"
       >
-        <HStack spacing={3} w="full">
-          <Box position="relative">
-            <Avatar
-              size="md"
-              name={displayName}
-              src={profile?.avatar_url || ''}
-              bg="purple.500"
-              color="white"
-              border="3px solid"
-              borderColor="purple.300"
-              shadow="sm"
-            />
-            <Box
-              position="absolute"
-              bottom={0}
-              right={0}
-              w="3"
-              h="3"
-              bg="green.400"
-              borderRadius="full"
-              border="2px solid white"
-            />
-          </Box>
-          
-          <Box flex="1" minW="0">
-            <Text 
-              fontSize="sm" 
-              fontWeight="bold" 
-              color="purple.700"
-              noOfLines={1}
-            >
-              {displayName}
-            </Text>
-            <Text 
-              fontSize="xs" 
-              color="purple.600"
-              noOfLines={1}
-            >
-              {displayEmail}
-            </Text>
-            {profile?.username && (
-              <Text 
-                fontSize="2xs" 
-                color="purple.500"
-                noOfLines={1}
-                mt={0.5}
-              >
-                @{profile.username}
-              </Text>
-            )}
-          </Box>
-          
-          <Icon as={FiEdit} color="purple.500" boxSize={4} />
-        </HStack>
-        
-        <Button
-          size="xs"
-          colorScheme="purple"
-          variant="ghost"
-          w="full"
-          onClick={(e) => {
-            e.stopPropagation();
-            router.push('/profile');
-          }}
-        >
-          Kelola Profil
-        </Button>
-      </VStack>
+        <Avatar
+          size="sm"
+          name={profile?.full_name || user.email}
+          src={profile?.avatar_url || ''}
+          bg="purple.500"
+          color="white"
+          border="2px solid"
+          borderColor="purple.300"
+        />
+        <Box flex="1" minW="0">
+          <Text 
+            fontSize="sm" 
+            fontWeight="semibold" 
+            color="purple.700"
+            noOfLines={1}
+          >
+            {profile?.full_name || 'User'}
+          </Text>
+          <Text 
+            fontSize="xs" 
+            color="purple.600"
+            noOfLines={1}
+          >
+            {user.email}
+          </Text>
+        </Box>
+        <Icon as={FiUser} color="purple.500" boxSize={3} />
+      </HStack>
     );
   };
 
   const SidebarContent = ({ onClose: closeDrawer }) => (
-    <VStack align="stretch" spacing={6} h="full">
+    <VStack align="stretch" spacing={6}>
       {/* Header */}
-      <Box textAlign="center" pb={4} borderBottom="1px" borderColor={borderColor}>
+      <Box textAlign="center" pb={3} borderBottom="1px" borderColor={borderColor}>
         <Text 
           fontSize="xl" 
           fontWeight="bold" 
@@ -457,7 +211,7 @@ export default function AdminLayout({ children }) {
       <UserProfileSection />
 
       {/* Navigation Menu */}
-      <VStack align="stretch" spacing={1} flex="1">
+      <VStack align="stretch" spacing={1}>
         {menuItems.map((item) => {
           const IconComponent = item.icon;
           return (
@@ -465,8 +219,8 @@ export default function AdminLayout({ children }) {
               key={item.href}
               href={item.href}
               display="block"
-              p={3}
-              borderRadius="lg"
+              p={2}
+              borderRadius="md"
               bg={isActive(item.href) ? 'purple.50' : 'transparent'}
               color={isActive(item.href) ? 'purple.600' : 'gray.700'}
               fontWeight={isActive(item.href) ? 'semibold' : 'medium'}
@@ -476,18 +230,14 @@ export default function AdminLayout({ children }) {
                 bg: hoverBg,
                 textDecoration: 'none',
                 color: 'purple.600',
-                transform: 'translateX(4px)',
-                shadow: 'md'
+                transform: 'translateX(2px)',
+                boxShadow: 'sm'
               }}
-              transition="all 0.3s ease-in-out"
+              transition="all 0.2s ease-in-out"
               onClick={closeDrawer}
             >
-              <HStack spacing={3}>
-                <Icon 
-                  as={IconComponent} 
-                  boxSize={5} 
-                  color={isActive(item.href) ? 'purple.500' : 'gray.500'}
-                />
+              <HStack spacing={2}>
+                <Icon as={IconComponent} boxSize={4} />
                 <Box flex="1">
                   <Text fontSize="sm" fontWeight="inherit">
                     {item.label}
@@ -499,7 +249,7 @@ export default function AdminLayout({ children }) {
                 {isActive(item.href) && (
                   <Box
                     w="2px"
-                    h="6"
+                    h="4"
                     bgGradient="linear(to-b, purple.500, pink.500)"
                     borderRadius="full"
                   />
@@ -515,24 +265,35 @@ export default function AdminLayout({ children }) {
       {/* User Actions */}
       <VStack align="stretch" spacing={2}>
         <Button
-          size="sm"
+          size="xs"
           variant="outline"
           leftIcon={<Icon as={FiArrowLeft} />}
           onClick={() => {
             router.push('/');
             if (closeDrawer) closeDrawer();
           }}
-          _hover={{ 
-            bg: 'gray.50',
-            transform: 'translateY(-1px)'
-          }}
+          _hover={{ bg: 'gray.50' }}
           transition="all 0.2s"
         >
           Kembali ke Site
         </Button>
+        
+        <Button
+          size="xs"
+          variant="outline"
+          leftIcon={<Icon as={FiUser} />}
+          onClick={() => {
+            router.push('/profile');
+            if (closeDrawer) closeDrawer();
+          }}
+          _hover={{ bg: 'blue.50' }}
+          transition="all 0.2s"
+        >
+          Kelola Profil
+        </Button>
 
         <Button
-          size="sm"
+          size="xs"
           colorScheme="red"
           variant="outline"
           leftIcon={<Icon as={FiLogOut} />}
@@ -540,10 +301,7 @@ export default function AdminLayout({ children }) {
             handleLogout();
             if (closeDrawer) closeDrawer();
           }}
-          _hover={{ 
-            bg: 'red.50',
-            transform: 'translateY(-1px)'
-          }}
+          _hover={{ bg: 'red.50' }}
           transition="all 0.2s"
         >
           Keluar
@@ -551,32 +309,20 @@ export default function AdminLayout({ children }) {
       </VStack>
 
       {/* Footer Info */}
-      <Box pt={3} borderTop="1px" borderColor={borderColor}>
+      <Box pt={2} borderTop="1px" borderColor={borderColor}>
         <Text fontSize="2xs" color="gray.500" textAlign="center">
-          HealthCheck v1.0 • Admin System
-        </Text>
-        <Text fontSize="2xs" color="gray.400" textAlign="center" mt={1}>
-          {mounted && user ? `Logged in as ${user.email}` : 'Not logged in'}
+          HealthCheck v1.0
         </Text>
       </Box>
     </VStack>
   );
 
-  // Render sederhana selama SSR - tanpa data dinamis
+  // Render sederhana selama SSR
   if (!mounted) {
     return (
       <Box minH="100vh" bg={mainBg}>
-        <Box ml={{ base: 0, md: "280px" }} minH="100vh">
-          <Box 
-            ml={{ base: 0, md: "280px" }}
-            minH="100vh"
-            w={{ base: "100%", md: "calc(100% - 280px)" }}
-            px={{ base: 4, md: 8 }}
-            py={{ base: 6, md: 8 }}
-            pt={{ base: 24, md: 24 }}
-          >
-            {children}
-          </Box>
+        <Box ml={{ base: 0, md: "220px" }} minH="100vh">
+          {children}
         </Box>
       </Box>
     );
@@ -588,22 +334,16 @@ export default function AdminLayout({ children }) {
       <Box
         display={{ base: "block", md: "none" }}
         position="fixed"
-        top={4}
-        left={4}
+        top={3}
+        left={3}
         zIndex={1100}
       >
         <Button
           onClick={onOpen}
           colorScheme="purple"
-          size="md"
+          size="sm"
           leftIcon={<Icon as={FiMenu} />}
-          shadow="lg"
-          borderRadius="full"
-          _hover={{
-            transform: 'scale(1.05)',
-            shadow: 'xl'
-          }}
-          transition="all 0.2s"
+          shadow="md"
         >
           Menu
         </Button>
@@ -614,28 +354,16 @@ export default function AdminLayout({ children }) {
         position="fixed"
         left={0}
         top={0}
-        w={{ base: "100%", md: "280px" }}
+        w={{ base: "100%", md: "220px" }}
         h="100vh"
         bg={sidebarBg}
         borderRight="1px"
         borderColor={borderColor}
-        p={6}
-        boxShadow="xl"
+        p={4}
+        boxShadow="md"
         zIndex={1000}
         display={{ base: "none", md: "block" }}
         overflowY="auto"
-        css={{
-          '&::-webkit-scrollbar': {
-            width: '4px',
-          },
-          '&::-webkit-scrollbar-track': {
-            width: '6px',
-          },
-          '&::-webkit-scrollbar-thumb': {
-            background: 'purple.200',
-            borderRadius: '24px',
-          },
-        }}
       >
         <SidebarContent />
       </Box>
@@ -648,40 +376,32 @@ export default function AdminLayout({ children }) {
         size="xs"
       >
         <DrawerOverlay />
-        <DrawerContent bg={sidebarBg} maxW="320px">
+        <DrawerContent bg={sidebarBg} maxW="260px">
           <DrawerCloseButton />
-          <DrawerHeader borderBottomWidth="1px" py={4}>
-            <VStack spacing={1}>
-              <Text 
-                fontSize="xl" 
-                fontWeight="bold" 
-                bgGradient="linear(to-r, purple.600, pink.500)"
-                bgClip="text"
-              >
-                Admin Panel
-              </Text>
-              <Text fontSize="xs" color="gray.500">
-                HealthCheck Management
-              </Text>
-            </VStack>
+          <DrawerHeader borderBottomWidth="1px" py={2}>
+            <Text 
+              fontSize="lg" 
+              fontWeight="bold" 
+              bgGradient="linear(to-r, purple.600, pink.500)"
+              bgClip="text"
+            >
+              Admin Panel
+            </Text>
           </DrawerHeader>
-          <DrawerBody py={4}>
+          <DrawerBody py={3}>
             <SidebarContent onClose={onClose} />
           </DrawerBody>
         </DrawerContent>
       </Drawer>
 
-      {/* HEADER BARU DI POJOK KANAN ATAS */}
-      <AdminHeader />
-
-      {/* Main Content Area - Diberi padding atas untuk header */}
+      {/* Main Content Area */}
       <Box 
-        ml={{ base: 0, md: "280px" }}
+        ml={{ base: 0, md: "110px" }} // Diperbaiki: harus sama dengan width sidebar
         minH="100vh"
-        w={{ base: "100%", md: "calc(100% - 280px)" }}
-        px={{ base: 4, md: 8 }}
-        py={{ base: 6, md: 8 }}
-        pt={{ base: 24, md: 24 }}
+        w={{ base: "100%", md: "calc(100% - 160px)" }}
+        px={{ base: 3, md: 6 }}
+        py={4}
+        pt={{ base: 12, md: 4 }}
       >
         {children}
       </Box>
