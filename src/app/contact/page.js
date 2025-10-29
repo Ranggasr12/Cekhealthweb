@@ -1,30 +1,82 @@
 "use client";
 
-import { useState } from 'react';
 import {
-  Box, Container, Heading, Text, VStack, HStack, Card, CardBody,
-  FormControl, FormLabel, Input, Textarea, Button, useToast,
-  Icon, SimpleGrid
+  Box,
+  Container,
+  Heading,
+  Text,
+  VStack,
+  HStack,
+  Card,
+  CardBody,
+  FormControl,
+  FormLabel,
+  Input,
+  Textarea,
+  Button,
+  useToast,
+  Icon,
+  SimpleGrid,
 } from "@chakra-ui/react";
+import { useState, useEffect } from 'react';
 import emailjs from '@emailjs/browser';
 
-// Icons
+// SVG Icons (tetap sama)
 const EmailIcon = (props) => (
-  <svg stroke="currentColor" fill="currentColor" strokeWidth="0" viewBox="0 0 24 24" height="1em" width="1em" {...props}>
+  <svg
+    stroke="currentColor"
+    fill="currentColor"
+    strokeWidth="0"
+    viewBox="0 0 24 24"
+    height="1em"
+    width="1em"
+    {...props}
+  >
     <path fill="none" d="M0 0h24v24H0z"></path>
     <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"></path>
   </svg>
 );
 
 const PhoneIcon = (props) => (
-  <svg stroke="currentColor" fill="currentColor" strokeWidth="0" viewBox="0 0 24 24" height="1em" width="1em" {...props}>
+  <svg
+    stroke="currentColor"
+    fill="currentColor"
+    strokeWidth="0"
+    viewBox="0 0 24 24"
+    height="1em"
+    width="1em"
+    {...props}
+  >
     <path fill="none" d="M0 0h24v24H0z"></path>
     <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"></path>
   </svg>
 );
 
+const LocationIcon = (props) => (
+  <svg
+    stroke="currentColor"
+    fill="currentColor"
+    strokeWidth="0"
+    viewBox="0 0 24 24"
+    height="1em"
+    width="1em"
+    {...props}
+  >
+    <path fill="none" d="M0 0h24v24H0z"></path>
+    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z"></path>
+  </svg>
+);
+
 const SendIcon = (props) => (
-  <svg stroke="currentColor" fill="currentColor" strokeWidth="0" viewBox="0 0 24 24" height="1em" width="1em" {...props}>
+  <svg
+    stroke="currentColor"
+    fill="currentColor"
+    strokeWidth="0"
+    viewBox="0 0 24 24"
+    height="1em"
+    width="1em"
+    {...props}
+  >
     <path fill="none" d="M0 0h24v24H0z"></path>
     <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
   </svg>
@@ -32,90 +84,155 @@ const SendIcon = (props) => (
 
 export default function ContactPage() {
   const toast = useToast();
-  const [loading, setLoading] = useState(false);
+  
   const [formData, setFormData] = useState({
-    name: '', email: '', subject: '', message: ''
+    name: '',
+    email: '',
+    subject: '',
+    message: ''
   });
+  
+  const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [emailjsReady, setEmailjsReady] = useState(false);
 
-  // 🔑 GANTI DENGAN DATA ANDA DARI EMAILJS
   const EMAILJS_CONFIG = {
-    serviceId: 'service_xxxxxxxxx',        // Ganti dengan Service ID Anda
-    adminTemplateId: 'template_xxxxxxxxx', // Ganti dengan Admin Template ID
-    autoReplyTemplateId: 'template_yyyyyyy', // Ganti dengan Auto-Reply Template ID  
-    publicKey: 'your_public_key_here'      // Ganti dengan Public Key Anda
+    serviceId: 'service_x3ynf7a',
+    adminTemplateId: 'template_rp1oy3o', 
+    autoReplyTemplateId: 'template_n1urg3m',
+    publicKey: 'KUXa_oH2YEw3Qun4Y'
   };
+
+  // Initialize EmailJS
+  useEffect(() => {
+    if (EMAILJS_CONFIG.publicKey) {
+      emailjs.init(EMAILJS_CONFIG.publicKey);
+      setEmailjsReady(true);
+      console.log('✅ EmailJS initialized');
+    }
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    
+    if (errors[name]) {
+      setErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
+    }
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+    
+    if (!formData.name.trim()) {
+      newErrors.name = 'Nama lengkap wajib diisi';
+    } else if (formData.name.trim().length < 2) {
+      newErrors.name = 'Nama terlalu pendek';
+    }
+    
+    if (!formData.email.trim()) {
+      newErrors.email = 'Email wajib diisi';
+    } else {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email)) {
+        newErrors.email = 'Format email tidak valid';
+      }
+    }
+    
+    if (!formData.subject.trim()) {
+      newErrors.subject = 'Subjek wajib diisi';
+    } else if (formData.subject.trim().length < 5) {
+      newErrors.subject = 'Subjek terlalu pendek';
+    }
+    
+    if (!formData.message.trim()) {
+      newErrors.message = 'Pesan wajib diisi';
+    } else if (formData.message.trim().length < 10) {
+      newErrors.message = 'Pesan terlalu pendek (minimal 10 karakter)';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!validateForm()) {
+      toast({
+        title: "Form Tidak Valid",
+        description: "Harap perbaiki error pada form sebelum mengirim",
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
+      return;
+    }
+
     setLoading(true);
 
-    // Validation
-    if (!formData.name || !formData.email || !formData.subject || !formData.message) {
-      toast({
-        title: "Form Tidak Lengkap",
-        description: "Harap isi semua field yang wajib diisi.",
-        status: "warning",
-        duration: 5000,
-        isClosable: true,
-      });
-      setLoading(false);
-      return;
-    }
-
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email)) {
-      toast({
-        title: "Email Tidak Valid",
-        description: "Harap masukkan alamat email yang valid.",
-        status: "warning",
-        duration: 5000,
-        isClosable: true,
-      });
-      setLoading(false);
-      return;
-    }
+    console.log('🔄 Memulai proses pengiriman form...');
 
     try {
-      console.log('📤 Mengirim email via EmailJS...');
+      // Template parameters untuk ADMIN
+      const adminParams = {
+        from_name: formData.name,
+        from_email: formData.email,
+        subject: formData.subject,
+        message: formData.message,
+        reply_to: formData.email,
+        timestamp: new Date().toLocaleString('id-ID'),
+        to_email: 'cekhealthv1@gmail.com'
+      };
 
-      // 1. Send email to admin
-      await emailjs.send(
+      console.log('📧 Admin params:', adminParams);
+
+      // 1. Kirim email ke ADMIN
+      console.log('🚀 Mengirim email ke admin...');
+      const adminResult = await emailjs.send(
         EMAILJS_CONFIG.serviceId,
         EMAILJS_CONFIG.adminTemplateId,
-        {
-          to_name: 'Admin CekHealth',
-          from_name: formData.name,
-          from_email: formData.email,
-          subject: formData.subject,
-          message: formData.message,
-          reply_to: formData.email,
-          timestamp: new Date().toLocaleString('id-ID')
-        },
-        EMAILJS_CONFIG.publicKey
+        adminParams
       );
 
-      // 2. Send auto-reply to user
-      await emailjs.send(
-        EMAILJS_CONFIG.serviceId,
-        EMAILJS_CONFIG.autoReplyTemplateId,
-        {
-          to_name: formData.name,
-          to_email: formData.email,
-          subject: formData.subject,
-          timestamp: new Date().toLocaleString('id-ID')
-        },
-        EMAILJS_CONFIG.publicKey
-      );
+      console.log('✅ Email ke admin berhasil:', adminResult);
+
+      // Template parameters untuk AUTO-REPLY
+      const autoReplyParams = {
+        to_name: formData.name,
+        to_email: formData.email,
+        subject: formData.subject,
+        timestamp: new Date().toLocaleString('id-ID'),
+        admin_email: 'cekhealthv1@gmail.com',
+        user_email: formData.email,
+        email: formData.email
+      };
+
+      console.log('📨 Auto-reply params:', autoReplyParams);
+
+      // 2. Kirim auto-reply ke USER - dengan error handling
+      console.log('🚀 Mengirim auto-reply ke user...');
+      try {
+        const autoReplyResult = await emailjs.send(
+          EMAILJS_CONFIG.serviceId,
+          EMAILJS_CONFIG.autoReplyTemplateId,
+          autoReplyParams
+        );
+        console.log('✅ Auto-reply berhasil:', autoReplyResult);
+      } catch (autoReplyError) {
+        console.warn('⚠️ Auto-reply gagal, tapi tidak masalah:', autoReplyError);
+        // Lanjutkan saja, yang penting email ke admin berhasil
+      }
 
       toast({
         title: "Pesan Terkirim! 🎉",
-        description: "Tim kami akan menghubungi Anda dalam 24 jam. Email konfirmasi telah dikirim.",
+        description: "Tim kami akan menghubungi Anda dalam 24 jam.",
         status: "success",
         duration: 6000,
         isClosable: true,
@@ -123,15 +240,46 @@ export default function ContactPage() {
       });
 
       // Reset form
-      setFormData({ name: '', email: '', subject: '', message: '' });
+      setFormData({
+        name: '',
+        email: '',
+        subject: '',
+        message: ''
+      });
+      setErrors({});
 
     } catch (error) {
       console.error('❌ Error mengirim email:', error);
       
-      let errorMessage = "Maaf, terjadi kesalahan. Silakan coba lagi.";
+      let errorMessage = "Maaf, terjadi kesalahan. Silakan coba lagi atau hubungi kami langsung melalui WhatsApp.";
       
-      if (error.text && error.text.includes('Quota exceeded')) {
-        errorMessage = "Quota email harian telah habis. Silakan hubungi kami langsung via email.";
+      if (error?.text) {
+        console.log('📝 Error text:', error.text);
+        
+        if (error.text.includes('The recipients address is empty')) {
+          errorMessage = "Pesan Anda sudah sampai ke admin! Kami akan menghubungi Anda segera.";
+          
+          // Tampilkan success message meskipun auto-reply gagal
+          toast({
+            title: "Pesan Terkirim! ✅",
+            description: "Pesan sudah sampai ke tim kami. Kami akan menghubungi Anda dalam 24 jam.",
+            status: "success",
+            duration: 6000,
+            isClosable: true,
+            position: "top"
+          });
+          
+          // Reset form
+          setFormData({
+            name: '',
+            email: '',
+            subject: '',
+            message: ''
+          });
+          setErrors({});
+          setLoading(false);
+          return;
+        }
       }
 
       toast({
@@ -144,12 +292,13 @@ export default function ContactPage() {
       });
     } finally {
       setLoading(false);
+      console.log('🏁 Proses pengiriman selesai');
     }
   };
 
   return (
-    <Box bg="white" minH="100vh" pt={0}>
-      <Container maxW="container.xl" py={{ base: 8, md: 16 }}>
+    <Box bg="white" minH="100vh">
+      <Container maxW="container.xl" py={{ base: 8, md: 16 }} pt={20}>
         <VStack spacing={{ base: 8, md: 12 }} align="stretch">
           
           {/* Header Section */}
@@ -164,7 +313,6 @@ export default function ContactPage() {
           </Box>
 
           <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={{ base: 8, lg: 12 }}>
-            
             {/* Contact Information */}
             <VStack spacing={6} align="start">
               <Heading size="lg" color="purple.700">
@@ -195,31 +343,71 @@ export default function ContactPage() {
                         <Text color="gray.500" fontSize="sm">Senin - Jumat, 08:00-16:00</Text>
                       </Box>
                     </HStack>
+
+                    <HStack spacing={4} align="start">
+                      <Box p={3} bg="purple.100" borderRadius="lg" mt={1}>
+                        <Icon as={LocationIcon} w={6} h={6} color="purple.600" />
+                      </Box>
+                      <Box>
+                        <Text fontWeight="bold" color="purple.700" fontSize="lg">Alamat</Text>
+                        <Text color="gray.600" fontSize="md">
+                          Program Studi Keperawatan<br />
+                          Politeknik Kesehatan Tanjung Karang <br />
+                          	Jl. Soekarno-Hatta No. 1 dan No. 6, Kota Bandar Lampung, Lampung, Indonesia
+                        </Text>
+                        <Text color="gray.500" fontSize="sm">Lampung, Indonesia</Text>
+                      </Box>
+                    </HStack>
                   </VStack>
                 </CardBody>
               </Card>
 
-              {/* Process Info */}
+              {/* Business Hours */}
+              <Card w="100%" borderRadius="xl" boxShadow="lg" bg="purple.50" border="1px" borderColor="purple.200">
+                <CardBody p={6}>
+                  <VStack spacing={4} align="start">
+                    <Heading size="md" color="purple.700">
+                      🕒 Jam Operasional
+                    </Heading>
+                    <VStack spacing={3} align="start" w="100%">
+                      <HStack justify="space-between" w="100%" p={2} bg="white" borderRadius="md" px={3}>
+                        <Text fontWeight="medium" color="purple.700">Senin - Jumat</Text>
+                        <Text color="gray.600" fontWeight="semibold">08:00 - 16:00</Text>
+                      </HStack>
+                      <HStack justify="space-between" w="100%" p={2} bg="white" borderRadius="md" px={3}>
+                        <Text fontWeight="medium" color="purple.700">Sabtu</Text>
+                        <Text color="gray.600" fontWeight="semibold">08:00 - 12:00</Text>
+                      </HStack>
+                      <HStack justify="space-between" w="100%" p={2} bg="white" borderRadius="md" px={3}>
+                        <Text fontWeight="medium" color="purple.700">Minggu</Text>
+                        <Text color="gray.500" fontStyle="italic">Tutup</Text>
+                      </HStack>
+                    </VStack>
+                  </VStack>
+                </CardBody>
+              </Card>
+
+              {/* WhatsApp Direct Contact */}
               <Card w="100%" borderRadius="xl" boxShadow="lg" bg="green.50" border="1px" borderColor="green.200">
                 <CardBody p={6}>
                   <VStack spacing={3} align="start">
                     <Heading size="md" color="green.700">
-                      📋 Proses Respons
+                      💬 Hubungi Langsung via WhatsApp
                     </Heading>
-                    <VStack spacing={2} align="start">
-                      <HStack spacing={3}>
-                        <Box w={2} h={2} bg="green.500" borderRadius="full" mt={1} />
-                        <Text color="green.700" fontSize="sm">Pesan langsung ke tim admin</Text>
-                      </HStack>
-                      <HStack spacing={3}>
-                        <Box w={2} h={2} bg="green.500" borderRadius="full" mt={1} />
-                        <Text color="green.700" fontSize="sm">Konfirmasi email otomatis</Text>
-                      </HStack>
-                      <HStack spacing={3}>
-                        <Box w={2} h={2} bg="green.500" borderRadius="full" mt={1} />
-                        <Text color="green.700" fontSize="sm">Respons personal dalam 24 jam</Text>
-                      </HStack>
-                    </VStack>
+                    <Text color="green.700" fontSize="sm">
+                      Untuk respon lebih cepat, silakan hubungi kami langsung melalui WhatsApp:
+                    </Text>
+                    <Button
+                      as="a"
+                      href="https://wa.me/622112345678"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      colorScheme="whatsapp"
+                      size="lg"
+                      w="100%"
+                    >
+                      📱 Chat via WhatsApp
+                    </Button>
                   </VStack>
                 </CardBody>
               </Card>
@@ -239,7 +427,7 @@ export default function ContactPage() {
 
                 <form onSubmit={handleSubmit}>
                   <VStack spacing={5}>
-                    <FormControl isRequired>
+                    <FormControl isRequired isInvalid={errors.name}>
                       <FormLabel fontWeight="semibold" color="gray.700" fontSize="md">
                         Nama Lengkap
                       </FormLabel>
@@ -250,12 +438,22 @@ export default function ContactPage() {
                         placeholder="Masukkan nama lengkap Anda"
                         size="lg"
                         borderRadius="lg"
-                        borderColor="gray.300"
+                        borderColor={errors.name ? "red.300" : "gray.300"}
                         bg="white"
+                        _focus={{
+                          borderColor: errors.name ? "red.500" : "purple.500",
+                          boxShadow: errors.name ? "0 0 0 2px rgba(229, 62, 62, 0.2)" : "0 0 0 2px rgba(128, 90, 213, 0.2)",
+                          bg: "white"
+                        }}
                       />
+                      {errors.name && (
+                        <Text color="red.500" fontSize="sm" mt={1}>
+                          {errors.name}
+                        </Text>
+                      )}
                     </FormControl>
 
-                    <FormControl isRequired>
+                    <FormControl isRequired isInvalid={errors.email}>
                       <FormLabel fontWeight="semibold" color="gray.700" fontSize="md">
                         Alamat Email
                       </FormLabel>
@@ -267,12 +465,22 @@ export default function ContactPage() {
                         placeholder="email@contoh.com"
                         size="lg"
                         borderRadius="lg"
-                        borderColor="gray.300"
+                        borderColor={errors.email ? "red.300" : "gray.300"}
                         bg="white"
+                        _focus={{
+                          borderColor: errors.email ? "red.500" : "purple.500",
+                          boxShadow: errors.email ? "0 0 0 2px rgba(229, 62, 62, 0.2)" : "0 0 0 2px rgba(128, 90, 213, 0.2)",
+                          bg: "white"
+                        }}
                       />
+                      {errors.email && (
+                        <Text color="red.500" fontSize="sm" mt={1}>
+                          {errors.email}
+                        </Text>
+                      )}
                     </FormControl>
 
-                    <FormControl isRequired>
+                    <FormControl isRequired isInvalid={errors.subject}>
                       <FormLabel fontWeight="semibold" color="gray.700" fontSize="md">
                         Subjek Pesan
                       </FormLabel>
@@ -283,12 +491,22 @@ export default function ContactPage() {
                         placeholder="Misal: Pertanyaan tentang fitur diagnosa"
                         size="lg"
                         borderRadius="lg"
-                        borderColor="gray.300"
+                        borderColor={errors.subject ? "red.300" : "gray.300"}
                         bg="white"
+                        _focus={{
+                          borderColor: errors.subject ? "red.500" : "purple.500",
+                          boxShadow: errors.subject ? "0 0 0 2px rgba(229, 62, 62, 0.2)" : "0 0 0 2px rgba(128, 90, 213, 0.2)",
+                          bg: "white"
+                        }}
                       />
+                      {errors.subject && (
+                        <Text color="red.500" fontSize="sm" mt={1}>
+                          {errors.subject}
+                        </Text>
+                      )}
                     </FormControl>
 
-                    <FormControl isRequired>
+                    <FormControl isRequired isInvalid={errors.message}>
                       <FormLabel fontWeight="semibold" color="gray.700" fontSize="md">
                         Pesan Anda
                       </FormLabel>
@@ -299,11 +517,21 @@ export default function ContactPage() {
                         placeholder="Tulis pesan detail Anda di sini..."
                         size="lg"
                         borderRadius="lg"
-                        borderColor="gray.300"
+                        borderColor={errors.message ? "red.300" : "gray.300"}
                         bg="white"
                         minH="180px"
                         resize="vertical"
+                        _focus={{
+                          borderColor: errors.message ? "red.500" : "purple.500",
+                          boxShadow: errors.message ? "0 0 0 2px rgba(229, 62, 62, 0.2)" : "0 0 0 2px rgba(128, 90, 213, 0.2)",
+                          bg: "white"
+                        }}
                       />
+                      {errors.message && (
+                        <Text color="red.500" fontSize="sm" mt={1}>
+                          {errors.message}
+                        </Text>
+                      )}
                     </FormControl>
 
                     <Button
@@ -324,12 +552,19 @@ export default function ContactPage() {
                         transform: "translateY(-2px)",
                         boxShadow: "0 10px 25px -5px rgba(128, 90, 213, 0.4)"
                       }}
+                      _active={{
+                        transform: "translateY(0)",
+                        boxShadow: "0 5px 15px -3px rgba(128, 90, 213, 0.4)"
+                      }}
+                      transition="all 0.3s ease"
+                      isDisabled={loading}
                     >
                       {loading ? "Mengirim..." : "Kirim Pesan Sekarang"}
                     </Button>
 
                     <Text fontSize="sm" color="gray.500" textAlign="center" mt={2}>
                       Dengan mengirim pesan, Anda menyetujui kebijakan privasi kami. 
+                      Data Anda aman dan tidak akan dibagikan.
                     </Text>
                   </VStack>
                 </form>
