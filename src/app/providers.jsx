@@ -1,48 +1,40 @@
 "use client";
 
-import { ChakraProvider, extendTheme } from "@chakra-ui/react";
+import { ChakraProvider } from '@chakra-ui/react';
+import { usePathname } from 'next/navigation';
+import dynamic from 'next/dynamic';
 
-const theme = extendTheme({
-  styles: {
-    global: {
-      html: {
-        width: "100%",
-        height: "100%",
-        margin: 0,
-        padding: 0,
-      },
-      body: {
-        width: "100%",
-        height: "100%",
-        margin: 0,
-        padding: 0,
-        overflowX: "hidden",
-        backgroundColor: "white",
-        fontFamily: "inherit",
-      },
-      "*": {
-        boxSizing: "border-box",
-      },
-    },
-  },
-  fonts: {
-    heading: "var(--font-poppins)",
-    body: "var(--font-poppins)",
-  },
-  breakpoints: {
-    base: "0em", // 0px
-    sm: "30em", // 480px
-    md: "48em", // 768px
-    lg: "62em", // 992px
-    xl: "80em", // 1280px
-    "2xl": "96em", // 1536px
-  },
+// Dynamic import untuk Navbar dengan ssr: false
+const Navbar = dynamic(() => import('@/components/navbar'), {
+  ssr: false,
+  loading: () => (
+    <div style={{ 
+      height: '64px', 
+      background: 'white', 
+      borderBottom: '1px solid #e2e8f0',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '0 1rem',
+      position: 'sticky',
+      top: 0,
+      zIndex: 1000
+    }}>
+      <div>Loading...</div>
+    </div>
+  )
 });
 
 export default function Providers({ children }) {
+  const pathname = usePathname();
+  
+  // Jangan tampilkan navbar di halaman admin
+  const showNavbar = !pathname?.startsWith('/admin');
+
   return (
-    <ChakraProvider theme={theme}>
-      {children}
+    <ChakraProvider>
+      {showNavbar && <Navbar />}
+      <main>{children}</main>
     </ChakraProvider>
   );
 }

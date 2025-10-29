@@ -1,4 +1,3 @@
-// app/admin/dashboard/page.js
 "use client";
 
 import { useEffect, useState } from 'react';
@@ -11,7 +10,6 @@ import {
   Button,
   SimpleGrid,
   Card,
-  CardHeader,
   CardBody,
   Stat,
   StatLabel,
@@ -19,175 +17,281 @@ import {
   StatHelpText,
   Alert,
   AlertIcon,
-  Badge
+  Badge,
+  Spinner,
+  HStack,
+  Icon,
+  Flex,
+  Progress,
+  useBreakpointValue
 } from '@chakra-ui/react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import AdminLayout from '@/components/AdminLayout';
+import { 
+  FiUsers, 
+  FiActivity, 
+  FiVideo, 
+  FiHelpCircle, 
+  FiSettings,
+  FiArrowRight
+} from 'react-icons/fi';
 
 export default function AdminDashboard() {
   const [user, setUser] = useState(null);
   const [stats, setStats] = useState({});
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
+
+  const gridColumns = useBreakpointValue({ 
+    base: 1, 
+    md: 2, 
+    lg: 4 
+  });
+
+  const actionColumns = useBreakpointValue({
+    base: 1,
+    md: 2,
+    lg: 3
+  });
 
   useEffect(() => {
     const loadData = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setUser(session?.user);
+      try {
+        setLoading(true);
+        const { data: { session } } = await supabase.auth.getSession();
+        setUser(session?.user);
 
-      // Load basic stats - HAPUS MAKALAH
-      const { count: videoCount } = await supabase
-        .from('videos')
-        .select('*', { count: 'exact', head: true });
+        if (!session) {
+          router.push('/login');
+          return;
+        }
 
-      const { count: pertanyaanCount } = await supabase
-        .from('pertanyaan')
-        .select('*', { count: 'exact', head: true });
+        // Load stats
+        const [
+          videosResult,
+          pertanyaanResult,
+          usersResult,
+          diagnosaResult
+        ] = await Promise.all([
+          supabase.from('videos').select('*', { count: 'exact', head: true }),
+          supabase.from('pertanyaan').select('*', { count: 'exact', head: true }),
+          supabase.from('profiles').select('*', { count: 'exact', head: true }),
+          supabase.from('hasil_diagnosa').select('*', { count: 'exact', head: true })
+        ]);
 
-      // Stats untuk user dan diagnosa
-      const { count: userCount } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true });
-
-      const { count: diagnosaCount } = await supabase
-        .from('hasil_diagnosa')
-        .select('*', { count: 'exact', head: true });
-
-      setStats({
-        videos: videoCount || 0,
-        pertanyaan: pertanyaanCount || 0,
-        users: userCount || 0,
-        diagnosa: diagnosaCount || 0
-      });
+        setStats({
+          videos: videosResult.count || 0,
+          pertanyaan: pertanyaanResult.count || 0,
+          users: usersResult.count || 0,
+          diagnosa: diagnosaResult.count || 0
+        });
+      } catch (error) {
+        console.error('Error loading dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
     };
 
     loadData();
-  }, []);
+  }, [router]);
+
+  const StatCard = ({ icon, label, value, helpText, color = "blue" }) => (
+    <Card 
+      bg="white"
+      border="1px"
+      borderColor={`${color}.100`}
+      boxShadow="sm"
+      _hover={{ 
+        transform: 'translateY(-2px)', 
+        shadow: 'md',
+        borderColor: `${color}.200`
+      }}
+      transition="all 0.3s ease"
+      height="100%"
+    >
+      <CardBody>
+        <VStack align="stretch" spacing={3}>
+          <HStack justify="space-between" align="flex-start">
+            <Box>
+              <Stat>
+                <StatLabel 
+                  color="gray.600" 
+                  fontSize="sm"
+                  fontWeight="medium"
+                >
+                  {label}
+                </StatLabel>
+                <StatNumber 
+                  color={`${color}.600`} 
+                  fontSize="xl" // Sedikit lebih kecil
+                  fontWeight="bold"
+                >
+                  {value}
+                </StatNumber>
+                <StatHelpText color="gray.500" fontSize="xs">
+                  {helpText}
+                </StatHelpText>
+              </Stat>
+            </Box>
+            <Icon 
+              as={icon} 
+              boxSize={5} // Sedikit lebih kecil
+              color={`${color}.500`} 
+              opacity={0.8}
+            />
+          </HStack>
+        </VStack>
+      </CardBody>
+    </Card>
+  );
+
+  const ActionButton = ({ icon, label, onClick, colorScheme = "blue" }) => (
+    <Button 
+      colorScheme={colorScheme}
+      onClick={onClick}
+      height="70px" // Sedikit lebih pendek
+      fontSize="md"
+      leftIcon={<Icon as={icon} />}
+      variant="outline"
+      _hover={{ 
+        transform: 'translateY(-1px)', 
+        shadow: 'md',
+        bg: `${colorScheme}.50`
+      }}
+      transition="all 0.2s"
+      display="flex"
+      flexDirection="column"
+      alignItems="center"
+      justifyContent="center"
+      gap={1}
+      py={3}
+    >
+      <Text fontWeight="semibold" fontSize="sm">{label}</Text>
+    </Button>
+  );
+
+  if (loading) {
+    return (
+      <AdminLayout>
+        <Container maxW="container.xl" py={4}>
+          <VStack spacing={4} align="center" justify="center" minH="300px">
+            <Spinner size="lg" color="purple.500" thickness="3px" />
+            <Text color="gray.600">Memuat dashboard...</Text>
+          </VStack>
+        </Container>
+      </AdminLayout>
+    );
+  }
 
   return (
-    <Container maxW="container.xl" py={8}>
-      <VStack spacing={6} align="stretch">
-        {/* Header */}
-        <Box>
-          <Heading color="purple.600" mb={2}>🎉 Admin Dashboard</Heading>
-          <Text color="gray.600" fontSize="lg">
-            Welcome to HealthCheck Admin Panel
-          </Text>
-          {user && (
-            <Text fontSize="sm" color="gray.500">
-              Logged in as: <Badge colorScheme="green">{user.email}</Badge>
-            </Text>
-          )}
-        </Box>
-
-        {/* Success Alert */}
-        <Alert status="success" borderRadius="md">
-          <AlertIcon />
+    <AdminLayout>
+      {/* Container dengan padding yang lebih kecil */}
+      <Box width="100%">
+        <VStack spacing={5} align="stretch"> {/* Spacing dikurangi dari 8 jadi 5 */}
+          {/* Header */}
           <Box>
-            <Text fontWeight="bold">Successfully deployed! 🚀</Text>
-            <Text fontSize="sm">
-              Admin panel is now fully functional. All systems operational.
-            </Text>
+            <Flex 
+              justify="space-between" 
+              align={{ base: "flex-start", md: "center" }}
+              direction={{ base: "column", md: "row" }}
+              gap={3}
+            >
+              <Box>
+                <Heading 
+                  size="lg" // Sedikit lebih kecil
+                  color="purple.600" 
+                  mb={1} // Margin bottom dikurangi
+                >
+                  Dashboard Admin
+                </Heading>
+                <Text color="gray.600" fontSize="md">
+                  Selamat datang di HealthCheck Admin Panel
+                </Text>
+                {user && (
+                  <HStack mt={1} spacing={2}>
+                    <Text fontSize="sm" color="gray.500">
+                      Login sebagai:
+                    </Text>
+                    <Badge colorScheme="green" fontSize="xs" textTransform="none">
+                      {user.email}
+                    </Badge>
+                  </HStack>
+                )}
+              </Box>
+            </Flex>
           </Box>
-        </Alert>
 
-        {/* Statistics */}
-        <SimpleGrid columns={{ base: 1, md: 4 }} spacing={6}>
-          <Card>
-            <CardHeader>
-              <Stat>
-                <StatLabel>Users</StatLabel>
-                <StatNumber>{stats.users}</StatNumber>
-                <StatHelpText>Registered users</StatHelpText>
-              </Stat>
-            </CardHeader>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <Stat>
-                <StatLabel>Diagnosa</StatLabel>
-                <StatNumber>{stats.diagnosa}</StatNumber>
-                <StatHelpText>Health checks</StatHelpText>
-              </Stat>
-            </CardHeader>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <Stat>
-                <StatLabel>Videos</StatLabel>
-                <StatNumber>{stats.videos}</StatNumber>
-                <StatHelpText>Educational content</StatHelpText>
-              </Stat>
-            </CardHeader>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <Stat>
-                <StatLabel>Pertanyaan</StatLabel>
-                <StatNumber>{stats.pertanyaan}</StatNumber>
-                <StatHelpText>Health questions</StatHelpText>
-              </Stat>
-            </CardHeader>
-          </Card>
-        </SimpleGrid>
-
-        {/* Admin Actions */}
-        <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={4}>
-          <Button 
-            colorScheme="blue" 
-            onClick={() => router.push('/admin/pertanyaan')}
-            height="100px"
-            fontSize="lg"
+          {/* Statistics Grid */}
+          <SimpleGrid 
+            columns={gridColumns} 
+            spacing={4} // Spacing dikurangi dari 6 jadi 4
           >
-            ❓ Manage Questions
-          </Button>
-          <Button 
-            colorScheme="blue" 
-            onClick={() => router.push('/admin/videos')}
-            height="100px"
-            fontSize="lg"
-          >
-            🎥 Manage Videos
-          </Button>
-          <Button 
-            colorScheme="blue" 
-            onClick={() => router.push('/admin/users')}
-            height="100px"
-            fontSize="lg"
-          >
-            👥 Manage Users
-          </Button>
-          <Button 
-            colorScheme="blue" 
-            onClick={() => router.push('/admin/diagnosa')}
-            height="100px"
-            fontSize="lg"
-          >
-            📊 View Diagnosa
-          </Button>
-          <Button 
-            colorScheme="blue" 
-            onClick={() => router.push('/admin/settings')}
-            height="100px"
-            fontSize="lg"
-          >
-            ⚙️ Settings
-          </Button>
-        </SimpleGrid>
+            <StatCard
+              icon={FiUsers}
+              label="Total Pengguna"
+              value={stats.users || 0}
+              helpText="Pengguna terdaftar"
+              color="purple"
+            />
+            <StatCard
+              icon={FiActivity}
+              label="Total Diagnosa"
+              value={stats.diagnosa || 0}
+              helpText="Pengecekan kesehatan"
+              color="green"
+            />
+            <StatCard
+              icon={FiVideo}
+              label="Total Video"
+              value={stats.videos || 0}
+              helpText="Konten edukasi"
+              color="blue"
+            />
+            <StatCard
+              icon={FiHelpCircle}
+              label="Total Pertanyaan"
+              value={stats.pertanyaan || 0}
+              helpText="Pertanyaan kesehatan"
+              color="orange"
+            />
+          </SimpleGrid>
 
-        {/* Deployment Info */}
-        <Box p={4} bg="blue.50" border="1px solid" borderColor="blue.200" borderRadius="md">
-          <Text fontWeight="bold" color="blue.800">Deployment Ready ✅</Text>
-          <Text fontSize="sm" color="blue.700">
-            • Database: Connected<br/>
-            • Authentication: Working<br/>
-            • Admin Access: Verified<br/>
-            • All Features: Operational
-          </Text>
-        </Box>
-      </VStack>
-    </Container>
+          {/* Quick Actions */}
+          <Box>
+            <Heading 
+              size="md" 
+              color="gray.700" 
+              mb={3} // Margin bottom dikurangi
+            >
+              Quick Actions
+            </Heading>
+            <SimpleGrid 
+              columns={actionColumns} 
+              spacing={3} // Spacing dikurangi dari 4 jadi 3
+            >
+              <ActionButton
+                icon={FiHelpCircle}
+                label="Kelola Pertanyaan"
+                onClick={() => router.push('/admin/pertanyaan')}
+                colorScheme="blue"
+              />
+              <ActionButton
+                icon={FiVideo}
+                label="Kelola Video"
+                onClick={() => router.push('/admin/videos')}
+                colorScheme="green"
+              />
+              <ActionButton
+                icon={FiSettings}
+                label="Pengaturan"
+                onClick={() => router.push('/admin/settings')}
+                colorScheme="purple"
+              />
+            </SimpleGrid>
+          </Box>
+        </VStack>
+      </Box>
+    </AdminLayout>
   );
 }
