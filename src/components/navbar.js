@@ -41,6 +41,7 @@ export default function Navbar() {
   const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isMockMode, setIsMockMode] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   const navItems = [
     { href: "/", label: "Home" },
@@ -51,6 +52,11 @@ export default function Navbar() {
   ];
 
   const isActive = (href) => pathname === href;
+
+  // Set mounted state setelah component mount di client
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Function untuk redirect berdasarkan role
   const redirectBasedOnRole = async (user) => {
@@ -89,6 +95,8 @@ export default function Navbar() {
   };
 
   useEffect(() => {
+    if (!mounted) return;
+
     loadUserData();
 
     // Listen for auth state changes
@@ -114,7 +122,7 @@ export default function Navbar() {
     );
 
     return () => subscription.unsubscribe();
-  }, [pathname]); // Add pathname to dependency
+  }, [pathname, mounted]);
 
   const loadUserData = async () => {
     try {
@@ -178,11 +186,6 @@ export default function Navbar() {
           // 🚨 AUTO-ADMIN untuk email tertentu
           const adminEmails = [
             'admin@cekhealth.com', 
-            'test@example.com', 
-            'rangga@example.com',
-            'rangapputral22@gmail.com',
-            'admin@gmail.com',
-            'superadmin@cekhealth.com'
           ];
           
           if (adminEmails.includes(session.user.email.toLowerCase())) {
@@ -221,27 +224,27 @@ export default function Navbar() {
     try {
       console.log('🚪 Attempting logout...');
       
+      // Clear local state first
+      setUser(null);
+      setRole(null);
+      
+      // Try to sign out from Supabase
       const { error } = await supabase.auth.signOut();
       
       if (error) {
-        throw error;
+        console.log('⚠️ Supabase logout error, clearing local data:', error.message);
+        // Continue dengan clear local data meskipun ada error
       }
 
-      console.log('✅ Logout successful');
-      
-      // Reset state
-      setUser(null);
-      setRole(null);
+      console.log('✅ Logout process completed');
       
       // Clear any cached data
       if (typeof window !== 'undefined') {
         localStorage.removeItem('supabase.auth.token');
+        sessionStorage.clear();
       }
       
-      // Redirect to home
-      router.push('/');
-      onClose();
-      
+      // Show success message
       toast({
         title: "Logout berhasil",
         description: "Anda telah logout dari sistem",
@@ -249,19 +252,36 @@ export default function Navbar() {
         duration: 3000,
       });
       
-      // Force reload to clear cache
+      // Redirect to home
+      router.push('/');
+      onClose();
+      
+      // Force reload to clear all state
       setTimeout(() => {
-        window.location.reload();
-      }, 500);
+        window.location.href = '/';
+      }, 1000);
       
     } catch (error) {
       console.error("❌ Logout error:", error);
+      
+      // Even if error, still clear local state and redirect
+      setUser(null);
+      setRole(null);
+      
       toast({
-        title: "Logout failed",
-        description: error.message,
-        status: "error",
+        title: "Logout completed",
+        description: "Session telah dibersihkan",
+        status: "info",
         duration: 3000,
       });
+      
+      router.push('/');
+      onClose();
+      
+      // Force reload
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 500);
     }
   };
 
@@ -294,6 +314,54 @@ export default function Navbar() {
     if (!user) return 'U';
     return user.email?.[0]?.toUpperCase() || 'U';
   };
+
+  // Jangan render apa-apa sampai component mounted di client
+  if (!mounted) {
+    return (
+      <Flex
+        as="nav"
+        align="center"
+        justify="space-between"
+        px={{ base: 4, md: 6, lg: 20 }}
+        py={3}
+        bg="white"
+        position="sticky"
+        top={0}
+        zIndex={1000}
+        boxShadow="sm"
+        borderBottom="1px"
+        borderColor="gray.100"
+      >
+        {/* Logo Skeleton */}
+        <Flex align="center">
+          <Image 
+            src="/images/Logo.svg" 
+            width="100px" 
+            alt="Logo HealthCheck" 
+            loading="eager"
+          />
+        </Flex>
+
+        {/* Navigation Skeleton */}
+        <HStack spacing={6} display={{ base: "none", md: "flex" }}>
+          {navItems.map((item) => (
+            <Box
+              key={item.href}
+              width="60px"
+              height="20px"
+              bg="gray.200"
+              borderRadius="md"
+            />
+          ))}
+        </HStack>
+
+        {/* Auth Section Skeleton */}
+        <HStack spacing={3} display={{ base: "none", md: "flex" }}>
+          <Spinner size="sm" color="purple.500" />
+        </HStack>
+      </Flex>
+    );
+  }
 
   return (
     <>
