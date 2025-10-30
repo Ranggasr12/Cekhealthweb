@@ -37,11 +37,21 @@ import {
   ModalFooter,
   ModalCloseButton,
   useDisclosure,
-  FormHelperText,
+  NumberInput,
+  NumberInputField,
+  NumberInputStepper,
+  NumberIncrementStepper,
+  NumberDecrementStepper,
+  Switch,
+  Spinner,
+  InputGroup,
+  InputLeftElement,
+  Progress,
+  Tooltip,
 } from '@chakra-ui/react';
 import { supabase } from '@/lib/supabase';
 import AdminLayout from '@/components/AdminLayout';
-import { FiTrash2, FiHelpCircle, FiEdit, FiPlus, FiX } from 'react-icons/fi';
+import { FiTrash2, FiHelpCircle, FiPlus, FiX, FiSettings, FiEdit3, FiSearch, FiAlertTriangle } from 'react-icons/fi';
 
 export default function PertanyaanManagement() {
   const [pertanyaan, setPertanyaan] = useState([]);
@@ -51,38 +61,63 @@ export default function PertanyaanManagement() {
     pertanyaan_text: '',
     saran: '',
     indikasi: '',
-    tingkat_keparahan: 'rendah'
+    tingkat_keparahan: 'rendah',
+    score: 1,
+    is_positive_indicator: true
   });
   const [newPenyakit, setNewPenyakit] = useState('');
+  const [penyakitForm, setPenyakitForm] = useState({
+    min_nilai: 0,
+    max_nilai: 100
+  });
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [loadingPenyakit, setLoadingPenyakit] = useState(false);
+  const [updatingPenyakit, setUpdatingPenyakit] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterPenyakit, setFilterPenyakit] = useState('');
+  
+  // Modals
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const { isOpen: isSettingsOpen, onOpen: onSettingsOpen, onClose: onSettingsClose } = useDisclosure();
+  const { isOpen: isEditOpen, onOpen: onEditOpen, onClose: onEditClose } = useDisclosure();
+  
+  const [selectedPenyakit, setSelectedPenyakit] = useState(null);
+  const [editingPertanyaan, setEditingPertanyaan] = useState(null);
   const toast = useToast();
 
   const tingkatKeparahanOptions = [
-    { value: 'rendah', label: 'Rendah', color: 'green' },
-    { value: 'sedang', label: 'Sedang', color: 'orange' },
-    { value: 'tinggi', label: 'Tinggi', color: 'red' }
+    { value: 'rendah', label: 'Rendah', color: 'green', score: 1 },
+    { value: 'sedang', label: 'Sedang', color: 'orange', score: 2 },
+    { value: 'tinggi', label: 'Tinggi', color: 'red', score: 3 }
   ];
 
-  // Fetch data pertanyaan dan jenis penyakit
+  // Helper function untuk data default - DIPERBAIKI
+  const getDefaultPenyakit = () => [
+    { id: '1', nama_penyakit: 'Diabetes', min_nilai: 1, max_nilai: 11 },
+    { id: '2', nama_penyakit: 'Hipertensi', min_nilai: 1, max_nilai: 15 },
+    { id: '3', nama_penyakit: 'Jantung', min_nilai: 0, max_nilai: 25 },
+    { id: '4', nama_penyakit: 'Kolesterol', min_nilai: 0, max_nilai: 18 }
+  ];
+
+  // Fetch data pertanyaan
   const fetchPertanyaan = useCallback(async () => {
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from('pertanyaan')
         .select('*')
-        .order('jenis_penyakit', { ascending: true });
+        .order('created_at', { ascending: false });
       
       if (error) throw error;
       setPertanyaan(data || []);
     } catch (error) {
+      console.error('Error fetching pertanyaan:', error);
       toast({
         title: 'Error',
         description: 'Gagal memuat data pertanyaan',
         status: 'error',
-        duration: 5000,
+        duration: 3000,
         isClosable: true,
       });
     } finally {
@@ -90,24 +125,47 @@ export default function PertanyaanManagement() {
     }
   }, [toast]);
 
+  // Fetch data penyakit - VERSION IMPROVED
   const fetchJenisPenyakit = useCallback(async () => {
     setLoadingPenyakit(true);
     try {
       const { data, error } = await supabase
-        .from('jenis_penyakit')
+        .from('penyakit_config')
         .select('*')
         .order('nama_penyakit', { ascending: true });
       
-      if (error) throw error;
-      setJenisPenyakit(data || []);
+      if (error) {
+        console.log('Error fetch penyakit:', error);
+        
+        // Jika tabel tidak ada, gunakan data statis
+        if (error.code === 'PGRST205' || error.message?.includes('schema cache') || error.code === '42P01') {
+          console.log('Tabel penyakit_config belum tersedia, menggunakan data statis');
+          setJenisPenyakit(getDefaultPenyakit());
+          
+          // Tampilkan alert info untuk admin
+          toast({
+            title: 'Database Setup Required',
+            description: 'Tabel penyakit_config perlu dibuat di Supabase. Gunakan data statis sementara.',
+            status: 'warning',
+            duration: 8000,
+            isClosable: true,
+          });
+          return;
+        }
+        
+        throw error;
+      }
+      
+      // Jika berhasil dan ada data
+      if (data && data.length > 0) {
+        setJenisPenyakit(data);
+      } else {
+        // Jika tabel ada tapi kosong, gunakan data statis
+        setJenisPenyakit(getDefaultPenyakit());
+      }
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Gagal memuat data jenis penyakit',
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
+      console.error('Error fetching jenis penyakit:', error);
+      setJenisPenyakit(getDefaultPenyakit());
     } finally {
       setLoadingPenyakit(false);
     }
@@ -118,7 +176,24 @@ export default function PertanyaanManagement() {
     fetchJenisPenyakit();
   }, [fetchPertanyaan, fetchJenisPenyakit]);
 
-  // Handler untuk menambah jenis penyakit baru
+  useEffect(() => {
+    const tingkat = tingkatKeparahanOptions.find(t => t.value === formData.tingkat_keparahan);
+    if (tingkat) {
+      setFormData(prev => ({ ...prev, score: tingkat.score }));
+    }
+  }, [formData.tingkat_keparahan]);
+
+  // Filter pertanyaan untuk search dan filter
+  const filteredPertanyaan = pertanyaan.filter(item => {
+    const matchesSearch = item.pertanyaan_text.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         item.saran?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         item.indikasi?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesPenyakit = filterPenyakit ? item.jenis_penyakit === filterPenyakit : true;
+    
+    return matchesSearch && matchesPenyakit;
+  });
+
+  // Tambah penyakit baru
   const handleAddPenyakit = async () => {
     if (!newPenyakit.trim()) {
       toast({
@@ -131,57 +206,164 @@ export default function PertanyaanManagement() {
       return;
     }
 
+    // Validasi nama penyakit unik
+    const isDuplicate = jenisPenyakit.some(
+      p => p.nama_penyakit.toLowerCase() === newPenyakit.trim().toLowerCase()
+    );
+    
+    if (isDuplicate) {
+      toast({
+        title: 'Error',
+        description: 'Jenis penyakit sudah ada',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    // Validasi rentang nilai
+    const min = parseInt(penyakitForm.min_nilai) || 0;
+    const max = parseInt(penyakitForm.max_nilai) || 100;
+    
+    if (min < 0) {
+      toast({
+        title: 'Error',
+        description: 'Nilai minimum tidak boleh kurang dari 0',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+    
+    if (max <= min) {
+      toast({
+        title: 'Error',
+        description: 'Nilai maksimum harus lebih besar dari nilai minimum',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
     try {
-      const { error } = await supabase
-        .from('jenis_penyakit')
+      const { data, error } = await supabase
+        .from('penyakit_config')
         .insert([{ 
           nama_penyakit: newPenyakit.trim(),
-          created_at: new Date().toISOString()
-        }]);
+          min_nilai: min,
+          max_nilai: max
+        }])
+        .select();
 
-      if (error) throw error;
+      if (error) {
+        if (error.code === '23505') {
+          throw new Error('Jenis penyakit sudah ada');
+        }
+        throw error;
+      }
 
       toast({
         title: 'Berhasil',
-        description: 'Jenis penyakit berhasil ditambahkan',
+        description: `Penyakit "${newPenyakit}" berhasil ditambahkan`,
         status: 'success',
         duration: 3000,
         isClosable: true,
       });
 
       setNewPenyakit('');
+      setPenyakitForm({ min_nilai: 0, max_nilai: 100 });
       onClose();
       fetchJenisPenyakit();
+      
     } catch (error) {
-      if (error.code === '23505') {
-        toast({
-          title: 'Error',
-          description: 'Jenis penyakit sudah ada',
-          status: 'error',
-          duration: 5000,
-          isClosable: true,
-        });
-      } else {
-        toast({
-          title: 'Error',
-          description: error.message,
-          status: 'error',
-          duration: 5000,
-          isClosable: true,
-        });
-      }
+      console.error('Error adding penyakit:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Gagal menambahkan penyakit. Pastikan tabel sudah dibuat di Supabase.',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
     }
   };
 
-  // Handler untuk menghapus jenis penyakit
+  // Update penyakit - IMPROVED VERSION
+  const handleUpdatePenyakitNilai = async (penyakit) => {
+    setUpdatingPenyakit(true);
+    try {
+      const min = parseInt(penyakitForm.min_nilai) || 0;
+      const max = parseInt(penyakitForm.max_nilai) || 100;
+
+      if (min < 0) throw new Error('Nilai minimum tidak boleh kurang dari 0');
+      if (max <= min) throw new Error('Nilai maksimum harus lebih besar dari nilai minimum');
+
+      const { error } = await supabase
+        .from('penyakit_config')
+        .update({ 
+          min_nilai: min,
+          max_nilai: max,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', penyakit.id);
+
+      if (error) {
+        // Jika tabel tidak ada, update state langsung
+        if (error.code === 'PGRST205' || error.message?.includes('schema cache') || error.code === '42P01') {
+          console.log('Tabel tidak ada, update state langsung');
+          setJenisPenyakit(prev => 
+            prev.map(p => 
+              p.id === penyakit.id 
+                ? { ...p, min_nilai: min, max_nilai: max }
+                : p
+            )
+          );
+          toast({
+            title: 'Data Disimpan Sementara',
+            description: 'Tabel database belum tersedia. Data disimpan sementara di memori.',
+            status: 'info',
+            duration: 4000,
+          });
+          onSettingsClose();
+          return;
+        }
+        throw error;
+      }
+
+      toast({
+        title: 'Berhasil',
+        description: `Nilai ${penyakit.nama_penyakit} berhasil diupdate`,
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+
+      onSettingsClose();
+      fetchJenisPenyakit();
+    } catch (error) {
+      console.error('Error updating penyakit:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Gagal update nilai penyakit.',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setUpdatingPenyakit(false);
+    }
+  };
+
+  // Hapus penyakit dengan validasi
   const handleDeletePenyakit = async (id, namaPenyakit) => {
-    // Cek apakah ada pertanyaan yang menggunakan penyakit ini
     const pertanyaanTerpakai = pertanyaan.filter(p => p.jenis_penyakit === namaPenyakit);
     
     if (pertanyaanTerpakai.length > 0) {
       toast({
         title: 'Tidak dapat menghapus',
-        description: `Terdapat ${pertanyaanTerpakai.length} pertanyaan yang menggunakan penyakit ini. Hapus atau ubah pertanyaan tersebut terlebih dahulu.`,
+        description: `Terdapat ${pertanyaanTerpakai.length} pertanyaan yang menggunakan penyakit "${namaPenyakit}". Hapus pertanyaan tersebut terlebih dahulu.`,
         status: 'error',
         duration: 6000,
         isClosable: true,
@@ -193,15 +375,29 @@ export default function PertanyaanManagement() {
 
     try {
       const { error } = await supabase
-        .from('jenis_penyakit')
+        .from('penyakit_config')
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
+      if (error) {
+        if (error.code === 'PGRST205' || error.message?.includes('schema cache') || error.code === '42P01') {
+          // Jika tabel tidak ada, hapus dari state saja
+          setJenisPenyakit(prev => prev.filter(p => p.id !== id));
+          toast({
+            title: 'Berhasil',
+            description: `Penyakit "${namaPenyakit}" berhasil dihapus dari memori`,
+            status: 'success',
+            duration: 3000,
+            isClosable: true,
+          });
+          return;
+        }
+        throw error;
+      }
 
       toast({
         title: 'Berhasil',
-        description: 'Jenis penyakit berhasil dihapus',
+        description: `Penyakit "${namaPenyakit}" berhasil dihapus`,
         status: 'success',
         duration: 3000,
         isClosable: true,
@@ -214,9 +410,10 @@ export default function PertanyaanManagement() {
         setFormData(prev => ({ ...prev, jenis_penyakit: '' }));
       }
     } catch (error) {
+      console.error('Error deleting penyakit:', error);
       toast({
         title: 'Error',
-        description: error.message,
+        description: error.message || 'Gagal menghapus penyakit',
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -224,6 +421,7 @@ export default function PertanyaanManagement() {
     }
   };
 
+  // Tambah pertanyaan
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
@@ -237,9 +435,19 @@ export default function PertanyaanManagement() {
         throw new Error('Jenis penyakit harus dipilih');
       }
 
+      const finalScore = formData.is_positive_indicator ? formData.score : -formData.score;
+
       const { error } = await supabase
         .from('pertanyaan')
-        .insert([formData]);
+        .insert([{
+          jenis_penyakit: formData.jenis_penyakit,
+          pertanyaan_text: formData.pertanyaan_text.trim(),
+          saran: formData.saran.trim(),
+          indikasi: formData.indikasi.trim(),
+          tingkat_keparahan: formData.tingkat_keparahan,
+          score: finalScore,
+          is_positive_indicator: formData.is_positive_indicator
+        }]);
 
       if (error) throw error;
 
@@ -255,10 +463,13 @@ export default function PertanyaanManagement() {
         pertanyaan_text: '',
         saran: '',
         indikasi: '',
-        tingkat_keparahan: 'rendah'
+        tingkat_keparahan: 'rendah',
+        score: 1,
+        is_positive_indicator: true
       });
       fetchPertanyaan();
     } catch (error) {
+      console.error('Error adding pertanyaan:', error);
       toast({
         title: 'Error',
         description: error.message,
@@ -271,6 +482,79 @@ export default function PertanyaanManagement() {
     }
   };
 
+  // Edit pertanyaan
+  const handleEditPertanyaan = (pertanyaanItem) => {
+    setEditingPertanyaan(pertanyaanItem);
+    setFormData({
+      jenis_penyakit: pertanyaanItem.jenis_penyakit,
+      pertanyaan_text: pertanyaanItem.pertanyaan_text,
+      saran: pertanyaanItem.saran || '',
+      indikasi: pertanyaanItem.indikasi || '',
+      tingkat_keparahan: pertanyaanItem.tingkat_keparahan,
+      score: Math.abs(pertanyaanItem.score),
+      is_positive_indicator: pertanyaanItem.score > 0
+    });
+    onEditOpen();
+  };
+
+  // Update pertanyaan
+  const handleUpdatePertanyaan = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+
+    try {
+      const finalScore = formData.is_positive_indicator ? formData.score : -formData.score;
+
+      const { error } = await supabase
+        .from('pertanyaan')
+        .update({
+          jenis_penyakit: formData.jenis_penyakit,
+          pertanyaan_text: formData.pertanyaan_text.trim(),
+          saran: formData.saran.trim(),
+          indikasi: formData.indikasi.trim(),
+          tingkat_keparahan: formData.tingkat_keparahan,
+          score: finalScore,
+          is_positive_indicator: formData.is_positive_indicator,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', editingPertanyaan.id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Pertanyaan berhasil diupdate!',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+
+      onEditClose();
+      setEditingPertanyaan(null);
+      setFormData({
+        jenis_penyakit: '',
+        pertanyaan_text: '',
+        saran: '',
+        indikasi: '',
+        tingkat_keparahan: 'rendah',
+        score: 1,
+        is_positive_indicator: true
+      });
+      fetchPertanyaan();
+    } catch (error) {
+      console.error('Error updating pertanyaan:', error);
+      toast({
+        title: 'Error',
+        description: error.message,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Hapus pertanyaan
   const handleDelete = async (id) => {
     if (!confirm('Apakah Anda yakin ingin menghapus pertanyaan ini?')) return;
 
@@ -311,27 +595,90 @@ export default function PertanyaanManagement() {
     return found ? found.label : 'Tidak Diketahui';
   };
 
+  const openSettingsModal = (penyakit) => {
+    setSelectedPenyakit(penyakit);
+    setPenyakitForm({
+      min_nilai: penyakit.min_nilai || 0,
+      max_nilai: penyakit.max_nilai || 100
+    });
+    onSettingsOpen();
+  };
+
+  // Hitung total score maksimal untuk setiap penyakit - DIPERBAIKI
+  const calculateMaxScores = () => {
+    const scores = {};
+    jenisPenyakit.forEach(penyakit => {
+      const pertanyaanPenyakit = pertanyaan.filter(p => p.jenis_penyakit === penyakit.nama_penyakit);
+      const totalScore = pertanyaanPenyakit.reduce((sum, p) => sum + Math.abs(p.score), 0);
+      scores[penyakit.nama_penyakit] = totalScore;
+    });
+    return scores;
+  };
+
+  const maxScores = calculateMaxScores();
+
+  // Fungsi untuk mendapatkan warna progress bar berdasarkan kondisi
+  const getProgressColor = (penyakit, maxScore) => {
+    if (maxScore === 0) return 'gray';
+    
+    const currentMax = maxScore || 0;
+    const recommendedMax = penyakit.max_nilai || 100;
+    
+    if (currentMax < recommendedMax * 0.5) return 'red';
+    if (currentMax < recommendedMax) return 'orange';
+    return 'green';
+  };
+
   return (
     <AdminLayout>
       <Box p={4}>
         <VStack spacing={6} align="stretch">
           <Box>
             <Heading size="lg" mb={2}>Kelola Pertanyaan Kesehatan</Heading>
-            <Text color="gray.600">Kelola pertanyaan, saran, dan indikasi untuk sistem diagnosa</Text>
+            <Text color="gray.600">Kelola pertanyaan, scoring, dan sistem diagnosa kesehatan</Text>
           </Box>
 
+          {/* Alert Info yang Diperbaiki */}
           <Alert status="info" borderRadius="md">
             <AlertIcon />
-            <Text fontSize="sm">
-              Pertanyaan akan digunakan dalam sistem diagnosa kesehatan pengguna
-            </Text>
+            <VStack align="start" spacing={2}>
+              <Text fontSize="sm" fontWeight="bold">📊 Sistem Scoring Diagnosa:</Text>
+              <Text fontSize="sm">• <Badge colorScheme="green">Indikator POSITIF</Badge>: Jawaban "YA" <strong>menambah</strong> score (+)</Text>
+              <Text fontSize="sm">• <Badge colorScheme="red">Indikator NEGATIF</Badge>: Jawaban "YA" <strong>mengurangi</strong> score (-)</Text>
+              <Text fontSize="sm">• Jawaban "TIDAK" <strong>tidak mempengaruhi</strong> score</Text>
+              <Text fontSize="sm">• Hasil diagnosa berdasarkan rentang nilai <strong>minimum-maksimum</strong> yang ditetapkan</Text>
+            </VStack>
           </Alert>
 
-          {/* Kelola Jenis Penyakit Section */}
+          {/* Database Status Alert */}
+          {jenisPenyakit.some(p => p.id.includes('temp')) && (
+            <Alert status="warning" borderRadius="md">
+              <AlertIcon />
+              <VStack align="start" spacing={1}>
+                <Text fontSize="sm" fontWeight="bold">⚠️ Menggunakan Data Sementara</Text>
+                <Text fontSize="sm">Tabel penyakit_config belum dibuat di database. Data disimpan sementara di memori.</Text>
+                <Button 
+                  size="sm" 
+                  colorScheme="blue" 
+                  mt={2}
+                  onClick={() => window.open('https://supabase.com/dashboard/project/' + process.env.NEXT_PUBLIC_SUPABASE_PROJECT_ID + '/sql', '_blank')}
+                >
+                  Buat Tabel di Supabase
+                </Button>
+              </VStack>
+            </Alert>
+          )}
+
+          {/* Kelola Jenis Penyakit Section - TAMPILAN DIPERBAIKI */}
           <Card>
             <CardBody>
               <HStack justify="space-between" mb={4}>
-                <Heading size="md">Kelola Jenis Penyakit</Heading>
+                <VStack align="start" spacing={1}>
+                  <Heading size="md">Kelola Jenis Penyakit & Rentang Nilai</Heading>
+                  <Text fontSize="sm" color="gray.600">
+                    {jenisPenyakit.length} penyakit • {pertanyaan.length} pertanyaan
+                  </Text>
+                </VStack>
                 <Button
                   leftIcon={<FiPlus />}
                   colorScheme="green"
@@ -342,47 +689,192 @@ export default function PertanyaanManagement() {
                 </Button>
               </HStack>
 
-              {jenisPenyakit.length === 0 ? (
+              {loadingPenyakit ? (
                 <Box textAlign="center" py={4}>
-                  <Text color="gray.500">Belum ada jenis penyakit</Text>
+                  <Spinner size="lg" />
+                  <Text mt={2} color="gray.500">Memuat data penyakit...</Text>
+                </Box>
+              ) : jenisPenyakit.length === 0 ? (
+                <Box textAlign="center" py={4}>
+                  <FiHelpCircle size={48} color="#CBD5E0" />
+                  <Text color="gray.500" mt={2}>Belum ada jenis penyakit</Text>
+                  <Button 
+                    mt={2} 
+                    colorScheme="blue" 
+                    size="sm"
+                    onClick={onOpen}
+                  >
+                    Tambah Penyakit Pertama
+                  </Button>
                 </Box>
               ) : (
-                <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={3}>
-                  {jenisPenyakit.map((penyakit) => (
-                    <Box
-                      key={penyakit.id}
-                      p={3}
-                      border="1px"
-                      borderColor="gray.200"
-                      borderRadius="md"
-                      bg="white"
-                    >
-                      <HStack justify="space-between">
-                        <Text fontWeight="medium">{penyakit.nama_penyakit}</Text>
-                        <IconButton
-                          icon={<FiX />}
-                          size="sm"
-                          colorScheme="red"
-                          variant="ghost"
-                          onClick={() => handleDeletePenyakit(penyakit.id, penyakit.nama_penyakit)}
-                          aria-label="Hapus penyakit"
-                          isDisabled={loadingPenyakit}
-                        />
-                      </HStack>
-                    </Box>
-                  ))}
+                <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={4}>
+                  {jenisPenyakit.map((penyakit) => {
+                    const totalPertanyaan = pertanyaan.filter(p => p.jenis_penyakit === penyakit.nama_penyakit).length;
+                    const maxScore = maxScores[penyakit.nama_penyakit] || 0;
+                    const progressColor = getProgressColor(penyakit, maxScore);
+                    const isDataTemporary = penyakit.id.includes('temp');
+                    
+                    return (
+                      <Card 
+                        key={penyakit.id} 
+                        variant="outline" 
+                        borderColor={isDataTemporary ? "orange.200" : "gray.200"}
+                        position="relative"
+                      >
+                        {isDataTemporary && (
+                          <Badge 
+                            position="absolute" 
+                            top={2} 
+                            right={2} 
+                            colorScheme="orange" 
+                            fontSize="xs"
+                          >
+                            Sementara
+                          </Badge>
+                        )}
+                        <CardBody>
+                          <VStack spacing={3} align="stretch">
+                            <HStack justify="space-between">
+                              <Badge 
+                                colorScheme="blue" 
+                                fontSize="sm" 
+                                px={2} 
+                                py={1}
+                              >
+                                {penyakit.nama_penyakit}
+                              </Badge>
+                              <HStack>
+                                <IconButton
+                                  icon={<FiSettings />}
+                                  size="sm"
+                                  colorScheme="blue"
+                                  variant="ghost"
+                                  onClick={() => openSettingsModal(penyakit)}
+                                  aria-label="Settings penyakit"
+                                />
+                                <IconButton
+                                  icon={<FiX />}
+                                  size="sm"
+                                  colorScheme="red"
+                                  variant="ghost"
+                                  onClick={() => handleDeletePenyakit(penyakit.id, penyakit.nama_penyakit)}
+                                  aria-label="Hapus penyakit"
+                                />
+                              </HStack>
+                            </HStack>
+                            
+                            <VStack spacing={2} align="start">
+                              <HStack spacing={4} width="full">
+                                <VStack align="start" spacing={0}>
+                                  <Text fontSize="xs" color="gray.500">Rentang Nilai</Text>
+                                  <Text fontSize="sm" fontWeight="bold">
+                                    {penyakit.min_nilai || 0} - {penyakit.max_nilai || 100}
+                                  </Text>
+                                </VStack>
+                                <VStack align="start" spacing={0}>
+                                  <Text fontSize="xs" color="gray.500">Pertanyaan</Text>
+                                  <Text fontSize="sm" fontWeight="bold">
+                                    {totalPertanyaan}
+                                  </Text>
+                                </VStack>
+                                <VStack align="start" spacing={0}>
+                                  <Text fontSize="xs" color="gray.500">Nilai Maks</Text>
+                                  <Text fontSize="sm" fontWeight="bold" color={maxScore === 0 ? "gray.500" : "green.600"}>
+                                    {maxScore}
+                                  </Text>
+                                </VStack>
+                              </HStack>
+                            </VStack>
+
+                            <Box>
+                              <HStack justify="space-between" mb={1}>
+                                <Text fontSize="xs" color="gray.600">Rentang Diagnosa:</Text>
+                                <Text fontSize="xs" fontWeight="bold">
+                                  {penyakit.min_nilai || 0} - {penyakit.max_nilai || 100}
+                                </Text>
+                              </HStack>
+                              
+                              <Tooltip 
+                                label={`Nilai maksimal saat ini: ${maxScore} | Rentang yang ditetapkan: ${penyakit.min_nilai || 0}-${penyakit.max_nilai || 100}`}
+                              >
+                                <Box 
+                                  bg="gray.100" 
+                                  borderRadius="md" 
+                                  p={1} 
+                                  position="relative" 
+                                  height="32px"
+                                  cursor="pointer"
+                                >
+                                  {/* Background bar untuk rentang yang ditetapkan */}
+                                  <Box
+                                    position="absolute"
+                                    left={`${((penyakit.min_nilai || 0) / Math.max(penyakit.max_nilai || 100, 1)) * 100}%`}
+                                    right={`${100 - (((penyakit.max_nilai || 100) / Math.max(penyakit.max_nilai || 100, 1)) * 100)}%`}
+                                    top={0}
+                                    bottom={0}
+                                    bg="green.200"
+                                    borderRadius="md"
+                                  />
+                                  
+                                  {/* Current max score indicator */}
+                                  {maxScore > 0 && (
+                                    <Box
+                                      position="absolute"
+                                      left={`${(maxScore / Math.max(penyakit.max_nilai || 100, 1)) * 100}%`}
+                                      top={-2}
+                                      bottom={-2}
+                                      width="3px"
+                                      bg="red.500"
+                                      borderRadius="full"
+                                    />
+                                  )}
+                                  
+                                  <Text 
+                                    fontSize="xs" 
+                                    textAlign="center" 
+                                    position="relative" 
+                                    zIndex={1} 
+                                    fontWeight="bold"
+                                    color={maxScore > (penyakit.max_nilai || 100) ? "red.600" : "gray.700"}
+                                  >
+                                    {maxScore > (penyakit.max_nilai || 100) ? "⚠️ " : ""}
+                                    {penyakit.min_nilai || 0} - {penyakit.max_nilai || 100}
+                                  </Text>
+                                </Box>
+                              </Tooltip>
+                              
+                              {maxScore > 0 && (
+                                <Text fontSize="xs" color="gray.500" mt={1}>
+                                  Nilai maksimal saat ini: <strong>{maxScore}</strong>
+                                  {maxScore > (penyakit.max_nilai || 100) && (
+                                    <Badge colorScheme="red" ml={1} fontSize="xs">
+                                      Melebihi batas
+                                    </Badge>
+                                  )}
+                                </Text>
+                              )}
+                            </Box>
+                          </VStack>
+                        </CardBody>
+                      </Card>
+                    );
+                  })}
                 </SimpleGrid>
               )}
             </CardBody>
           </Card>
 
+          {/* Form dan Tabel Pertanyaan (tetap sama seperti sebelumnya) */}
           <Grid templateColumns={{ base: '1fr', lg: '1fr 1fr' }} gap={6}>
             {/* Add Pertanyaan Form */}
             <GridItem>
               <Card>
                 <CardBody>
-                  <Heading size="md" mb={4}>Tambah Pertanyaan Baru</Heading>
-                  <form onSubmit={handleSubmit}>
+                  <Heading size="md" mb={4}>
+                    {editingPertanyaan ? 'Edit Pertanyaan' : 'Tambah Pertanyaan Baru'}
+                  </Heading>
+                  <form onSubmit={editingPertanyaan ? handleUpdatePertanyaan : handleSubmit}>
                     <VStack spacing={4}>
                       <FormControl isRequired>
                         <FormLabel>Jenis Penyakit</FormLabel>
@@ -397,9 +889,6 @@ export default function PertanyaanManagement() {
                             </option>
                           ))}
                         </Select>
-                        <FormHelperText>
-                          Jika penyakit tidak ada, tambahkan terlebih dahulu di section Kelola Jenis Penyakit
-                        </FormHelperText>
                       </FormControl>
 
                       <FormControl isRequired>
@@ -410,6 +899,55 @@ export default function PertanyaanManagement() {
                           placeholder="Teks pertanyaan untuk user"
                           rows={3}
                         />
+                      </FormControl>
+
+                      <FormControl>
+                        <FormLabel>Tipe Indikator</FormLabel>
+                        <HStack spacing={4}>
+                          <HStack>
+                            <Switch
+                              isChecked={formData.is_positive_indicator}
+                              onChange={(e) => setFormData(prev => ({ ...prev, is_positive_indicator: e.target.checked }))}
+                              colorScheme="green"
+                            />
+                            <Text fontSize="sm">
+                              {formData.is_positive_indicator ? 'Indikator Positif' : 'Indikator Negatif'}
+                            </Text>
+                          </HStack>
+                          <Badge colorScheme={formData.is_positive_indicator ? 'green' : 'red'} fontSize="xs">
+                            {formData.is_positive_indicator ? 'YA menambah score' : 'YA mengurangi score'}
+                          </Badge>
+                        </HStack>
+                      </FormControl>
+
+                      <FormControl isRequired>
+                        <FormLabel>Score</FormLabel>
+                        <NumberInput
+                          value={formData.score}
+                          onChange={(value) => setFormData(prev => ({ ...prev, score: parseInt(value) || 1 }))}
+                          min={1}
+                          max={10}
+                        >
+                          <NumberInputField />
+                          <NumberInputStepper>
+                            <NumberIncrementStepper />
+                            <NumberDecrementStepper />
+                          </NumberInputStepper>
+                        </NumberInput>
+                      </FormControl>
+
+                      <FormControl>
+                        <FormLabel>Tingkat Keparahan</FormLabel>
+                        <Select
+                          value={formData.tingkat_keparahan}
+                          onChange={(e) => setFormData(prev => ({ ...prev, tingkat_keparahan: e.target.value }))}
+                        >
+                          {tingkatKeparahanOptions.map((tingkat) => (
+                            <option key={tingkat.value} value={tingkat.value}>
+                              {tingkat.label} (Score: {tingkat.score})
+                            </option>
+                          ))}
+                        </Select>
                       </FormControl>
 
                       <FormControl>
@@ -432,29 +970,38 @@ export default function PertanyaanManagement() {
                         />
                       </FormControl>
 
-                      <FormControl>
-                        <FormLabel>Tingkat Keparahan</FormLabel>
-                        <Select
-                          value={formData.tingkat_keparahan}
-                          onChange={(e) => setFormData(prev => ({ ...prev, tingkat_keparahan: e.target.value }))}
-                        >
-                          {tingkatKeparahanOptions.map((tingkat) => (
-                            <option key={tingkat.value} value={tingkat.value}>
-                              {tingkat.label}
-                            </option>
-                          ))}
-                        </Select>
-                      </FormControl>
-
                       <Button
                         type="submit"
                         colorScheme="blue"
                         w="full"
                         isLoading={submitting}
+                        loadingText={editingPertanyaan ? "Mengupdate..." : "Menambahkan..."}
                         leftIcon={<FiHelpCircle />}
                       >
-                        Tambah Pertanyaan
+                        {editingPertanyaan ? 'Update Pertanyaan' : 'Tambah Pertanyaan'}
                       </Button>
+
+                      {editingPertanyaan && (
+                        <Button
+                          w="full"
+                          variant="outline"
+                          onClick={() => {
+                            onEditClose();
+                            setEditingPertanyaan(null);
+                            setFormData({
+                              jenis_penyakit: '',
+                              pertanyaan_text: '',
+                              saran: '',
+                              indikasi: '',
+                              tingkat_keparahan: 'rendah',
+                              score: 1,
+                              is_positive_indicator: true
+                            });
+                          }}
+                        >
+                          Batal Edit
+                        </Button>
+                      )}
                     </VStack>
                   </form>
                 </CardBody>
@@ -466,14 +1013,47 @@ export default function PertanyaanManagement() {
               <Card>
                 <CardBody>
                   <Heading size="md" mb={4}>
-                    Daftar Pertanyaan ({pertanyaan.length})
+                    Daftar Pertanyaan ({filteredPertanyaan.length} dari {pertanyaan.length})
                   </Heading>
                   
-                  {pertanyaan.length === 0 ? (
+                  {/* Search and Filter */}
+                  <HStack mb={4} spacing={4}>
+                    <InputGroup>
+                      <InputLeftElement>
+                        <FiSearch color="gray.300" />
+                      </InputLeftElement>
+                      <Input
+                        placeholder="Cari pertanyaan, saran, atau indikasi..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                      />
+                    </InputGroup>
+                    <Select
+                      placeholder="Filter penyakit"
+                      value={filterPenyakit}
+                      onChange={(e) => setFilterPenyakit(e.target.value)}
+                      maxW="200px"
+                    >
+                      {jenisPenyakit.map((penyakit) => (
+                        <option key={penyakit.id} value={penyakit.nama_penyakit}>
+                          {penyakit.nama_penyakit}
+                        </option>
+                      ))}
+                    </Select>
+                  </HStack>
+                  
+                  {loading ? (
+                    <Box textAlign="center" py={8}>
+                      <Spinner size="lg" />
+                      <Text color="gray.500" mt={4}>
+                        Memuat data pertanyaan...
+                      </Text>
+                    </Box>
+                  ) : filteredPertanyaan.length === 0 ? (
                     <Box textAlign="center" py={8}>
                       <FiHelpCircle size={48} color="#CBD5E0" />
                       <Text color="gray.500" mt={4}>
-                        Belum ada pertanyaan
+                        {pertanyaan.length === 0 ? 'Belum ada pertanyaan' : 'Tidak ada pertanyaan yang sesuai dengan filter'}
                       </Text>
                     </Box>
                   ) : (
@@ -483,12 +1063,13 @@ export default function PertanyaanManagement() {
                           <Tr>
                             <Th>Penyakit</Th>
                             <Th>Pertanyaan</Th>
+                            <Th>Score</Th>
                             <Th>Keparahan</Th>
                             <Th>Aksi</Th>
                           </Tr>
                         </Thead>
                         <Tbody>
-                          {pertanyaan.map((item) => (
+                          {filteredPertanyaan.map((item) => (
                             <Tr key={item.id}>
                               <Td>
                                 <Badge colorScheme="blue" fontSize="xs">
@@ -502,10 +1083,29 @@ export default function PertanyaanManagement() {
                                   </Text>
                                   {item.saran && (
                                     <Text fontSize="xs" color="gray.600" noOfLines={1}>
-                                      💡 {item.saran}
+                                      Saran: {item.saran}
                                     </Text>
                                   )}
+                                  {item.indikasi && (
+                                    <Text fontSize="xs" color="gray.500" noOfLines={1}>
+                                      Indikasi: {item.indikasi}
+                                    </Text>
+                                  )}
+                                  <Badge 
+                                    colorScheme={item.score > 0 ? 'green' : 'red'} 
+                                    fontSize="xs"
+                                  >
+                                    {item.score > 0 ? 'Positif' : 'Negatif'}
+                                  </Badge>
                                 </VStack>
+                              </Td>
+                              <Td>
+                                <Badge 
+                                  colorScheme={item.score > 0 ? 'green' : 'red'}
+                                  fontSize="sm"
+                                >
+                                  {item.score > 0 ? '+' : ''}{item.score}
+                                </Badge>
                               </Td>
                               <Td>
                                 <Badge 
@@ -517,6 +1117,14 @@ export default function PertanyaanManagement() {
                               </Td>
                               <Td>
                                 <HStack>
+                                  <IconButton
+                                    icon={<FiEdit3 />}
+                                    size="sm"
+                                    colorScheme="blue"
+                                    variant="ghost"
+                                    onClick={() => handleEditPertanyaan(item)}
+                                    aria-label="Edit pertanyaan"
+                                  />
                                   <IconButton
                                     icon={<FiTrash2 />}
                                     size="sm"
@@ -537,33 +1145,6 @@ export default function PertanyaanManagement() {
               </Card>
             </GridItem>
           </Grid>
-
-          {/* Statistics by Disease Type */}
-          {pertanyaan.length > 0 && (
-            <Card>
-              <CardBody>
-                <Heading size="md" mb={4}>Statistik per Jenis Penyakit</Heading>
-                <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={4}>
-                  {jenisPenyakit.map((penyakit) => {
-                    const count = pertanyaan.filter(p => p.jenis_penyakit === penyakit.nama_penyakit).length;
-                    if (count === 0) return null;
-                    
-                    return (
-                      <Card key={penyakit.id} variant="outline">
-                        <CardBody>
-                          <VStack spacing={2}>
-                            <Badge colorScheme="blue">{penyakit.nama_penyakit}</Badge>
-                            <Text fontSize="2xl" fontWeight="bold">{count}</Text>
-                            <Text fontSize="sm" color="gray.600">Pertanyaan</Text>
-                          </VStack>
-                        </CardBody>
-                      </Card>
-                    );
-                  })}
-                </SimpleGrid>
-              </CardBody>
-            </Card>
-          )}
         </VStack>
       </Box>
 
@@ -574,23 +1155,48 @@ export default function PertanyaanManagement() {
           <ModalHeader>Tambah Jenis Penyakit Baru</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
-            <FormControl>
-              <FormLabel>Nama Penyakit</FormLabel>
-              <Input
-                value={newPenyakit}
-                onChange={(e) => setNewPenyakit(e.target.value)}
-                placeholder="Masukkan nama penyakit baru"
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddPenyakit();
-                  }
-                }}
-              />
-              <FormHelperText>
-                Contoh: Diabetes, Hipertensi, Jantung, dll.
-              </FormHelperText>
-            </FormControl>
+            <VStack spacing={4}>
+              <FormControl isRequired>
+                <FormLabel>Nama Penyakit</FormLabel>
+                <Input
+                  value={newPenyakit}
+                  onChange={(e) => setNewPenyakit(e.target.value)}
+                  placeholder="Masukkan nama penyakit baru"
+                />
+              </FormControl>
+
+              <FormControl>
+                <FormLabel>Nilai Minimum</FormLabel>
+                <NumberInput
+                  value={penyakitForm.min_nilai}
+                  onChange={(value) => setPenyakitForm(prev => ({ ...prev, min_nilai: parseInt(value) || 0 }))}
+                  min={0}
+                  max={100}
+                >
+                  <NumberInputField />
+                  <NumberInputStepper>
+                    <NumberIncrementStepper />
+                    <NumberDecrementStepper />
+                  </NumberInputStepper>
+                </NumberInput>
+              </FormControl>
+
+              <FormControl>
+                <FormLabel>Nilai Maksimum</FormLabel>
+                <NumberInput
+                  value={penyakitForm.max_nilai}
+                  onChange={(value) => setPenyakitForm(prev => ({ ...prev, max_nilai: parseInt(value) || 100 }))}
+                  min={1}
+                  max={1000}
+                >
+                  <NumberInputField />
+                  <NumberInputStepper>
+                    <NumberIncrementStepper />
+                    <NumberDecrementStepper />
+                  </NumberInputStepper>
+                </NumberInput>
+              </FormControl>
+            </VStack>
           </ModalBody>
           <ModalFooter>
             <Button variant="ghost" mr={3} onClick={onClose}>
@@ -601,7 +1207,182 @@ export default function PertanyaanManagement() {
               onClick={handleAddPenyakit}
               leftIcon={<FiPlus />}
             >
-              Tambah
+              Tambah Penyakit
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Modal Settings Penyakit */}
+      <Modal isOpen={isSettingsOpen} onClose={onSettingsClose}>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>
+            Pengaturan: {selectedPenyakit?.nama_penyakit}
+          </ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <VStack spacing={4}>
+              <FormControl>
+                <FormLabel>Nilai Minimum</FormLabel>
+                <NumberInput
+                  value={penyakitForm.min_nilai}
+                  onChange={(value) => setPenyakitForm(prev => ({ ...prev, min_nilai: parseInt(value) || 0 }))}
+                  min={0}
+                  max={100}
+                >
+                  <NumberInputField />
+                  <NumberInputStepper>
+                    <NumberIncrementStepper />
+                    <NumberDecrementStepper />
+                  </NumberInputStepper>
+                </NumberInput>
+              </FormControl>
+
+              <FormControl>
+                <FormLabel>Nilai Maksimum</FormLabel>
+                <NumberInput
+                  value={penyakitForm.max_nilai}
+                  onChange={(value) => setPenyakitForm(prev => ({ ...prev, max_nilai: parseInt(value) || 100 }))}
+                  min={1}
+                  max={1000}
+                >
+                  <NumberInputField />
+                  <NumberInputStepper>
+                    <NumberIncrementStepper />
+                    <NumberDecrementStepper />
+                  </NumberInputStepper>
+                </NumberInput>
+              </FormControl>
+            </VStack>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={onSettingsClose}>
+              Batal
+            </Button>
+            <Button 
+              colorScheme="blue" 
+              onClick={() => handleUpdatePenyakitNilai(selectedPenyakit)}
+              isLoading={updatingPenyakit}
+            >
+              Update Nilai
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Modal Edit Pertanyaan */}
+      <Modal isOpen={isEditOpen} onClose={onEditClose} size="xl">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Edit Pertanyaan</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <VStack spacing={4}>
+              <FormControl isRequired>
+                <FormLabel>Jenis Penyakit</FormLabel>
+                <Select
+                  value={formData.jenis_penyakit}
+                  onChange={(e) => setFormData(prev => ({ ...prev, jenis_penyakit: e.target.value }))}
+                >
+                  {jenisPenyakit.map((penyakit) => (
+                    <option key={penyakit.id} value={penyakit.nama_penyakit}>
+                      {penyakit.nama_penyakit}
+                    </option>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <FormControl isRequired>
+                <FormLabel>Pertanyaan</FormLabel>
+                <Textarea
+                  value={formData.pertanyaan_text}
+                  onChange={(e) => setFormData(prev => ({ ...prev, pertanyaan_text: e.target.value }))}
+                  placeholder="Teks pertanyaan untuk user"
+                  rows={3}
+                />
+              </FormControl>
+
+              <FormControl>
+                <FormLabel>Tipe Indikator</FormLabel>
+                <HStack spacing={4}>
+                  <HStack>
+                    <Switch
+                      isChecked={formData.is_positive_indicator}
+                      onChange={(e) => setFormData(prev => ({ ...prev, is_positive_indicator: e.target.checked }))}
+                      colorScheme="green"
+                    />
+                    <Text fontSize="sm">
+                      {formData.is_positive_indicator ? 'Indikator Positif' : 'Indikator Negatif'}
+                    </Text>
+                  </HStack>
+                  <Badge colorScheme={formData.is_positive_indicator ? 'green' : 'red'} fontSize="xs">
+                    {formData.is_positive_indicator ? 'YA menambah score' : 'YA mengurangi score'}
+                  </Badge>
+                </HStack>
+              </FormControl>
+
+              <FormControl isRequired>
+                <FormLabel>Score</FormLabel>
+                <NumberInput
+                  value={formData.score}
+                  onChange={(value) => setFormData(prev => ({ ...prev, score: parseInt(value) || 1 }))}
+                  min={1}
+                  max={10}
+                >
+                  <NumberInputField />
+                  <NumberInputStepper>
+                    <NumberIncrementStepper />
+                    <NumberDecrementStepper />
+                  </NumberInputStepper>
+                </NumberInput>
+              </FormControl>
+
+              <FormControl>
+                <FormLabel>Tingkat Keparahan</FormLabel>
+                <Select
+                  value={formData.tingkat_keparahan}
+                  onChange={(e) => setFormData(prev => ({ ...prev, tingkat_keparahan: e.target.value }))}
+                >
+                  {tingkatKeparahanOptions.map((tingkat) => (
+                    <option key={tingkat.value} value={tingkat.value}>
+                      {tingkat.label} (Score: {tingkat.score})
+                    </option>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <FormControl>
+                <FormLabel>Saran</FormLabel>
+                <Textarea
+                  value={formData.saran}
+                  onChange={(e) => setFormData(prev => ({ ...prev, saran: e.target.value }))}
+                  placeholder="Saran untuk user berdasarkan jawaban"
+                  rows={2}
+                />
+              </FormControl>
+
+              <FormControl>
+                <FormLabel>Indikasi</FormLabel>
+                <Textarea
+                  value={formData.indikasi}
+                  onChange={(e) => setFormData(prev => ({ ...prev, indikasi: e.target.value }))}
+                  placeholder="Indikasi kesehatan (untuk analisis internal)"
+                  rows={2}
+                />
+              </FormControl>
+            </VStack>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={onEditClose}>
+              Batal
+            </Button>
+            <Button 
+              colorScheme="blue" 
+              onClick={handleUpdatePertanyaan}
+              isLoading={submitting}
+            >
+              Update Pertanyaan
             </Button>
           </ModalFooter>
         </ModalContent>
