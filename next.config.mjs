@@ -1,4 +1,3 @@
-/** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
     appDir: true,
@@ -6,6 +5,10 @@ const nextConfig = {
   images: {
     domains: ['https://xibxjzmuuqiqawhroogj.supabase.co'],
   },
+  // Optional: Untuk performance
+  compiler: {
+    styledComponents: true,
+  },
 }
 
-module.exports = nextConfig
+export default nextConfig
