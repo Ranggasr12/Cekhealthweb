@@ -6,6 +6,10 @@ const nextConfig = {
   images: {
     domains: ['https://xibxjzmuuqiqawhroogj.supabase.co'],
   },
+  // Optional: Untuk performance
+  compiler: {
+    styledComponents: true,
+  },
 }
 
-module.exports = nextConfig
+export default nextConfig

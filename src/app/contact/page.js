@@ -21,6 +21,7 @@ import {
 import { useState, useEffect } from 'react';
 import emailjs from '@emailjs/browser';
 
+
 // SVG Icons (tetap sama)
 const EmailIcon = (props) => (
   <svg
@@ -193,7 +194,6 @@ export default function ContactPage() {
 
       console.log('📧 Admin params:', adminParams);
 
-      // 1. Kirim email ke ADMIN
       console.log('🚀 Mengirim email ke admin...');
       const adminResult = await emailjs.send(
         EMAILJS_CONFIG.serviceId,
@@ -203,7 +203,7 @@ export default function ContactPage() {
 
       console.log('✅ Email ke admin berhasil:', adminResult);
 
-      // Template parameters untuk AUTO-REPLY
+    
       const autoReplyParams = {
         to_name: formData.name,
         to_email: formData.email,
@@ -216,7 +216,7 @@ export default function ContactPage() {
 
       console.log('📨 Auto-reply params:', autoReplyParams);
 
-      // 2. Kirim auto-reply ke USER - dengan error handling
+     
       console.log('🚀 Mengirim auto-reply ke user...');
       try {
         const autoReplyResult = await emailjs.send(
@@ -227,7 +227,7 @@ export default function ContactPage() {
         console.log('✅ Auto-reply berhasil:', autoReplyResult);
       } catch (autoReplyError) {
         console.warn('⚠️ Auto-reply gagal, tapi tidak masalah:', autoReplyError);
-        // Lanjutkan saja, yang penting email ke admin berhasil
+        
       }
 
       toast({
@@ -239,7 +239,7 @@ export default function ContactPage() {
         position: "top"
       });
 
-      // Reset form
+  
       setFormData({
         name: '',
         email: '',
@@ -259,7 +259,7 @@ export default function ContactPage() {
         if (error.text.includes('The recipients address is empty')) {
           errorMessage = "Pesan Anda sudah sampai ke admin! Kami akan menghubungi Anda segera.";
           
-          // Tampilkan success message meskipun auto-reply gagal
+          
           toast({
             title: "Pesan Terkirim! ✅",
             description: "Pesan sudah sampai ke tim kami. Kami akan menghubungi Anda dalam 24 jam.",
