@@ -12,7 +12,7 @@ const poppins = Poppins({
 
 export const metadata = {
   title: 'HealthCheck - Cek Kesehatan Online',
-  description: 'Platform cek kesehatan online  ',
+  description: 'Platform cek kesehatan online',
 };
 
 export default function RootLayout({ children }) {
@@ -21,7 +21,7 @@ export default function RootLayout({ children }) {
       <body className={poppins.className} suppressHydrationWarning>
         <ChakraProvider>
           <Navbar />
-          <main>{children}</main>
+          <main style={{ minHeight: '100vh' }}>{children}</main>
         </ChakraProvider>
       </body>
     </html>

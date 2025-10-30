@@ -1,137 +1,296 @@
-import { useState } from 'react'
+"use client";
+
+import { useState } from 'react';
 import {
   Box,
-  Flex,
-  Stack,
+  Container,
+  VStack,
+  Heading,
   Text,
-  Input,
-  Button,
   FormControl,
   FormLabel,
+  Input,
+  Button,
+  Alert,
+  AlertIcon,
+  Link,
   useToast,
-  Card,
-  CardBody
-} from '@chakra-ui/react'
-import { supabase } from '../../lib/supabase'
-import { useRouter } from 'next/router'
-import Link from 'next/link'
+  Spinner,
+  InputGroup,
+  InputRightElement,
+  IconButton,
+} from '@chakra-ui/react';
+import { supabase } from '@/lib/supabase';
+import { useRouter } from 'next/navigation';
+import { ViewIcon, ViewOffIcon } from '@chakra-ui/icons';
 
-export default function AdminLogin() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const router = useRouter()
-  const toast = useToast()
+export default function Login() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [debugInfo, setDebugInfo] = useState('');
+  const router = useRouter();
+  const toast = useToast();
 
   const handleLogin = async (e) => {
-    e.preventDefault()
-    setLoading(true)
+    e.preventDefault();
+    setLoading(true);
+    setDebugInfo('');
+
+    // Basic validation
+    if (!email.trim() || !password.trim()) {
+      toast({
+        title: 'Form tidak lengkap',
+        description: 'Harap isi email dan password',
+        status: 'warning',
+        duration: 3000,
+      });
+      setLoading(false);
+      return;
+    }
 
     try {
+      console.log("🔐 Login attempt...", { 
+        email: email.trim(),
+        passwordLength: password.length 
+      });
+
+      setDebugInfo('Mencoba login...');
+
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      })
+        email: email.trim().toLowerCase(), // Convert to lowercase
+        password: password.trim(),
+      });
 
-      if (error) throw error
-
-      // Check if user is admin
-      const { data: userData } = await supabase
-        .from('users')
-        .select('role')
-        .eq('id', data.user.id)
-        .single()
-
-      if (!userData || userData.role !== 'admin') {
-        await supabase.auth.signOut()
-        throw new Error('Hanya admin yang dapat login')
+      if (error) {
+        console.error("❌ Login error:", error);
+        setDebugInfo(`Error: ${error.message}`);
+        
+        // Handle specific errors
+        if (error.message.includes("Invalid login credentials")) {
+          toast({
+            title: 'Login Gagal',
+            description: 'Email atau password salah. Pastikan akun sudah terdaftar.',
+            status: 'error',
+            duration: 5000,
+          });
+          return;
+        }
+        
+        if (error.message.includes("Email not confirmed")) {
+          toast({
+            title: 'Email Belum Diverifikasi',
+            description: 'Silakan cek email Anda untuk verifikasi akun',
+            status: 'warning',
+            duration: 5000,
+          });
+          return;
+        }
+        
+        if (error.message.includes("Too many requests")) {
+          toast({
+            title: 'Terlalu Banyak Percobaan',
+            description: 'Tunggu beberapa saat sebelum mencoba lagi',
+            status: 'warning',
+            duration: 5000,
+          });
+          return;
+        }
+        
+        throw error;
       }
 
+      console.log("✅ Login successful:", data);
+      setDebugInfo('Login berhasil! Mengarahkan...');
+
       toast({
-        title: 'Login berhasil!',
+        title: 'Login Berhasil!',
+        description: 'Selamat datang di CekHealth',
         status: 'success',
         duration: 3000,
-        isClosable: true,
-      })
+      });
 
-      router.push('/admin/dashboard')
+      // Redirect to appropriate page based on user role
+      setTimeout(() => {
+        router.push('/admin/dashboard');
+        router.refresh();
+      }, 1000);
+
     } catch (error) {
+      console.error("❌ Login failed:", error);
+      setDebugInfo(`Login gagal: ${error.message}`);
+      
       toast({
-        title: 'Login gagal',
-        description: error.message,
+        title: 'Login Gagal',
+        description: error.message || 'Terjadi kesalahan saat login',
         status: 'error',
         duration: 5000,
-        isClosable: true,
-      })
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
+
+  const handleDemoLogin = async () => {
+    setEmail('demo@cekhealth.com');
+    setPassword('demopassword123');
+    
+    toast({
+      title: 'Demo credentials diisi',
+      description: 'Klik Login untuk mencoba',
+      status: 'info',
+      duration: 3000,
+    });
+  };
+
+  const handleTestAdminLogin = async () => {
+    setEmail('admin@cekhealth.com');
+    setPassword('admin123');
+    
+    toast({
+      title: 'Admin credentials diisi',
+      description: 'Klik Login untuk mencoba',
+      status: 'info',
+      duration: 3000,
+    });
+  };
 
   return (
-    <Flex minH="100vh" align="center" justify="center" bg="gray.50">
-      <Card maxW="md" w="full">
-        <CardBody p={8}>
-          <Stack spacing={6}>
-            <Stack align="center">
-              <Text fontSize="2xl" fontWeight="bold">
-                Admin Login
-              </Text>
-              <Text color="gray.600">
-                CekHealth Management System
-              </Text>
-            </Stack>
+    <Container maxW="container.sm" py={10}>
+      <VStack spacing={8}>
+        <Box textAlign="center">
+          <Heading size="xl" color="purple.600" mb={2}>
+            Masuk ke Akun
+          </Heading>
+          <Text color="gray.600">
+            Masuk untuk mengakses dashboard CekHealth
+          </Text>
+        </Box>
 
-            <form onSubmit={handleLogin}>
-              <Stack spacing={4}>
-                <FormControl isRequired>
-                  <FormLabel>Email</FormLabel>
-                  <Input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="admin@cekhealth.com"
-                  />
-                </FormControl>
+        {/* Demo Buttons - Only in development */}
+        {process.env.NODE_ENV === 'development' && (
+          <VStack spacing={2} w="100%">
+            <Button
+              size="sm"
+              colorScheme="blue"
+              variant="outline"
+              onClick={handleDemoLogin}
+              w="100%"
+            >
+              Isi Demo User
+            </Button>
+            <Button
+              size="sm"
+              colorScheme="green"
+              variant="outline"
+              onClick={handleTestAdminLogin}
+              w="100%"
+            >
+              Isi Demo Admin
+            </Button>
+          </VStack>
+        )}
 
-                <FormControl isRequired>
-                  <FormLabel>Password</FormLabel>
+        <Box w="100%" maxW="400px">
+          <form onSubmit={handleLogin}>
+            <VStack spacing={4}>
+              <FormControl isRequired>
+                <FormLabel>Email</FormLabel>
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="email@example.com"
+                  size="lg"
+                  autoComplete="email"
+                  isDisabled={loading}
+                />
+              </FormControl>
+
+              <FormControl isRequired>
+                <FormLabel>Password</FormLabel>
+                <InputGroup size="lg">
                   <Input
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
+                    placeholder="Masukkan password"
+                    autoComplete="current-password"
+                    isDisabled={loading}
                   />
-                </FormControl>
+                  <InputRightElement>
+                    <IconButton
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      icon={showPassword ? <ViewOffIcon /> : <ViewIcon />}
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowPassword(!showPassword)}
+                    />
+                  </InputRightElement>
+                </InputGroup>
+              </FormControl>
 
-                <Button
-                  type="submit"
-                  colorScheme="blue"
-                  size="lg"
-                  fontSize="md"
-                  isLoading={loading}
-                  w="full"
-                >
-                  Login
-                </Button>
-              </Stack>
-            </form>
+              <Button
+                type="submit"
+                colorScheme="purple"
+                size="lg"
+                w="100%"
+                isLoading={loading}
+                loadingText="Memproses..."
+                isDisabled={!email || !password}
+                bgGradient="linear(to-r, purple.500, pink.500)"
+                _hover={{
+                  bgGradient: "linear(to-r, purple.600, pink.600)",
+                }}
+              >
+                {loading ? <Spinner size="sm" /> : 'Masuk'}
+              </Button>
+            </VStack>
+          </form>
 
-            <Box p={4} bg="blue.50" borderRadius="md">
-              <Text fontSize="sm" fontWeight="bold">Default Admin:</Text>
-              <Text fontSize="sm">Email: admin@cekhealth.com</Text>
-              <Text fontSize="sm">Password: admin123</Text>
-            </Box>
+          {/* Debug Info */}
+          {process.env.NODE_ENV === 'development' && debugInfo && (
+            <Alert status="info" mt={4} size="sm">
+              <AlertIcon />
+              <Text fontSize="sm">{debugInfo}</Text>
+            </Alert>
+          )}
 
-            <Text textAlign="center" fontSize="sm" color="gray.600">
-              Kembali ke{' '}
-              <Link href="/" style={{ color: 'blue.500' }}>
-                Halaman Utama
-              </Link>
-            </Text>
-          </Stack>
-        </CardBody>
-      </Card>
-    </Flex>
-  )
+          <Text mt={4} textAlign="center">
+            Belum punya akun?{' '}
+            <Link href="/register" color="purple.500" fontWeight="bold">
+              Daftar di sini
+            </Link>
+          </Text>
+
+          <Text mt={2} textAlign="center" fontSize="sm" color="gray.500">
+            Lupa password?{' '}
+            <Link 
+              href="#" 
+              color="purple.400"
+              onClick={() => toast({
+                title: 'Fitur Reset Password',
+                description: 'Fitur reset password sedang dalam pengembangan',
+                status: 'info',
+                duration: 3000,
+              })}
+            >
+              Reset di sini
+            </Link>
+          </Text>
+        </Box>
+
+        {/* Demo Accounts Info */}
+        <Alert status="info" borderRadius="md">
+          <AlertIcon />
+          <Box>
+            <Text fontWeight="bold">Akun Demo:</Text>
+            <Text fontSize="sm">Admin: admin@cekhealth.com / admin123</Text>
+            <Text fontSize="sm">User: demo@cekhealth.com / demopassword123</Text>
+          </Box>
+        </Alert>
+      </VStack>
+    </Container>
+  );
 }

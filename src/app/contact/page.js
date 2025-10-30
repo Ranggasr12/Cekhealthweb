@@ -406,7 +406,7 @@ export default function ContactPage() {
                       size="lg"
                       w="100%"
                     >
-                      📱 Chat via WhatsApp
+                     Chat via WhatsApp
                     </Button>
                   </VStack>
                 </CardBody>

@@ -16,8 +16,14 @@ import {
   ModalCloseButton,
   useDisclosure,
   Skeleton,
+  VStack,
+  SimpleGrid,
+  Container,
+  useColorModeValue,
+  Icon,
 } from "@chakra-ui/react";
 import { useRouter } from 'next/navigation';
+import { FiHeart, FiVideo, FiFileText, FiUsers } from 'react-icons/fi';
 
 // SVG Icon untuk Chevron Down
 const ChevronDownIcon = (props) => (
@@ -35,6 +41,33 @@ const ChevronDownIcon = (props) => (
   </svg>
 );
 
+const features = [
+  {
+    icon: FiHeart,
+    title: 'Cek Kesehatan',
+    description: 'Periksa kondisi kesehatan Anda dengan alat kami yang terpercaya',
+    color: 'purple',
+  },
+  {
+    icon: FiVideo,
+    title: 'Video Edukasi',
+    description: 'Belajar kesehatan melalui video edukatif dari profesional',
+    color: 'pink',
+  },
+  {
+    icon: FiFileText,
+    title: 'Konsultasi Online',
+    description: 'Konsultasi dengan dokter profesional secara online',
+    color: 'blue',
+  },
+  {
+    icon: FiUsers,
+    title: 'Komunitas',
+    description: 'Bergabung dengan komunitas peduli kesehatan',
+    color: 'green',
+  },
+];
+
 export default function Home() {
   const router = useRouter();
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -48,17 +81,21 @@ export default function Home() {
     router.push('/form');
   };
 
+  const bgGradient = useColorModeValue(
+    'linear(to-r, white 40%, purple.50 100%)',
+    'linear(to-r, gray.900 40%, purple.900 100%)'
+  );
+
   // Loading state
   if (!isClient) {
     return (
       <Box bg="white" minH="100vh" w="100vw" overflowX="hidden">
-        {/* Skeleton untuk hero section */}
         <Box
           position="relative"
           w="100vw"
           minH="100vh"
           overflow="hidden"
-          bgGradient="linear(to-r, white 40%, purple.100 100%)"
+          bgGradient={bgGradient}
         >
           <Flex
             direction={{ base: "column", lg: "row" }}
@@ -90,7 +127,7 @@ export default function Home() {
         w="100vw"
         minH="100vh"
         overflow="hidden"
-        bgGradient="linear(to-r, white 40%, purple.100 100%)"
+        bgGradient={bgGradient}
       >
         {/* Background Wave dengan Gradient */}
         <Box
@@ -145,7 +182,7 @@ export default function Home() {
           zIndex={0}
         />
 
-        {/* Konten utama - DITURUNKAN POSISINYA */}
+        {/* Konten utama */}
         <Flex
           direction={{ base: "column", lg: "row" }}
           align="center"
@@ -157,9 +194,8 @@ export default function Home() {
           px={{ base: 4, md: 6, lg: 20 }}
           position="relative"
           zIndex={2}
-          mt={{ base: "-60px", md: "-80px", lg: "-100px" }} // ⬅️ DITAMBAHKAN MARGIN TOP NEGATIF
+          mt={{ base: "-60px", md: "-80px", lg: "-100px" }}
         >
-          {/* Teks Konten - Sekarang lebih ke atas */}
           <Box 
             flex="1"
             zIndex={2}
@@ -195,10 +231,9 @@ export default function Home() {
               mx="auto"
               maxW="500px"
             >
-              Klik mulai untuk mengetahui bagaimana kondisi Kesehatanmu
+              Platform kesehatan terpercaya untuk memantau kondisi kesehatan Anda dengan mudah dan akurat
             </Text>
             
-            {/* BUTTON - DITAMBAHKAN MARGIN TOP */}
             <Button
               size={{ base: "md", md: "lg" }}
               borderRadius="full"
@@ -220,12 +255,95 @@ export default function Home() {
               justifyContent="center"
               minW={{ base: "160px", md: "180px" }}
               minH={{ base: "52px", md: "60px" }}
-              mt={{ base: 2, md: 4 }} // ⬅️ DITAMBAHKAN MARGIN TOP
+              mt={{ base: 2, md: 4 }}
             >
-              Mulai
+              Mulai Sekarang
             </Button>
           </Box>
         </Flex>
+      </Box>
+
+      {/* Features Section */}
+      <Container maxW="1200px" py={20}>
+        <VStack spacing={16}>
+          <VStack spacing={4} textAlign="center" maxW="600px" mx="auto">
+            <Heading as="h2" size="2xl" color="purple.800">
+              Layanan Kami
+            </Heading>
+            <Text fontSize="lg" color="gray.600">
+              Berbagai layanan kesehatan yang tersedia untuk membantu Anda menjaga kesehatan
+            </Text>
+          </VStack>
+
+          <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={8} w="100%">
+            {features.map((feature, index) => (
+              <Box
+                key={index}
+                p={6}
+                borderRadius="xl"
+                bg="white"
+                boxShadow="xl"
+                border="1px"
+                borderColor="gray.100"
+                textAlign="center"
+                transition="all 0.3s"
+                _hover={{
+                  transform: "translateY(-8px)",
+                  boxShadow: "2xl",
+                }}
+              >
+                <Flex
+                  w={16}
+                  h={16}
+                  bgGradient={`linear(to-r, ${feature.color}.500, ${feature.color}.300)`}
+                  borderRadius="full"
+                  align="center"
+                  justify="center"
+                  mx="auto"
+                  mb={4}
+                >
+                  <Icon as={feature.icon} w={8} h={8} color="white" />
+                </Flex>
+                <Heading as="h3" size="lg" mb={3} color="gray.800">
+                  {feature.title}
+                </Heading>
+                <Text color="gray.600" lineHeight="1.6">
+                  {feature.description}
+                </Text>
+              </Box>
+            ))}
+          </SimpleGrid>
+        </VStack>
+      </Container>
+
+      {/* CTA Section */}
+      <Box
+        bgGradient="linear(to-r, purple.500, pink.500)"
+        color="white"
+        py={20}
+      >
+        <Container maxW="1200px">
+          <VStack spacing={6} textAlign="center">
+            <Heading as="h2" size="2xl">
+              Siap Memulai Perjalanan Kesehatan Anda?
+            </Heading>
+            <Text fontSize="xl" maxW="600px">
+              Bergabung dengan ribuan orang yang telah mempercayai kesehatan mereka pada kami
+            </Text>
+            <Button
+              size="lg"
+              colorScheme="white"
+              variant="outline"
+              _hover={{
+                bg: "white",
+                color: "purple.500",
+              }}
+              onClick={handleGetStarted}
+            >
+              Cek Kesehatan Gratis
+            </Button>
+          </VStack>
+        </Container>
       </Box>
 
       {/* Modal untuk Menampilkan Video */}

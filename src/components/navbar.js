@@ -52,6 +52,42 @@ export default function Navbar() {
 
   const isActive = (href) => pathname === href;
 
+  // Function untuk redirect berdasarkan role
+  const redirectBasedOnRole = async (user) => {
+    try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+
+      const userRole = profile?.role || 'user';
+      
+      console.log('🔀 Redirect check - Role:', userRole, 'Current path:', pathname);
+      
+      // Jika admin dan sedang di halaman utama, redirect ke admin dashboard
+      if (userRole === 'admin' && (pathname === '/' || pathname === '/home')) {
+        console.log('🚀 Redirecting admin to dashboard');
+        router.push('/admin/dashboard');
+      }
+      // Jika user biasa dan sedang di halaman admin, redirect ke home
+      else if (userRole === 'user' && pathname.startsWith('/admin')) {
+        console.log('🔒 Redirecting user to home - Access denied');
+        router.push('/');
+        
+        // Show toast notification
+        toast({
+          title: "Akses Ditolak",
+          description: "Hanya admin yang bisa mengakses halaman ini",
+          status: "error",
+          duration: 3000,
+        });
+      }
+    } catch (error) {
+      console.error('❌ Error redirecting:', error);
+    }
+  };
+
   useEffect(() => {
     loadUserData();
 
@@ -62,6 +98,12 @@ export default function Navbar() {
         if (event === 'SIGNED_IN' && session) {
           console.log('✅ User signed in:', session.user.email);
           await loadUserData();
+          
+          // Redirect berdasarkan role setelah login
+          setTimeout(() => {
+            redirectBasedOnRole(session.user);
+          }, 1000);
+          
         } else if (event === 'SIGNED_OUT') {
           console.log('🔒 User signed out');
           setUser(null);
@@ -72,7 +114,7 @@ export default function Navbar() {
     );
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [pathname]); // Add pathname to dependency
 
   const loadUserData = async () => {
     try {
@@ -112,10 +154,6 @@ export default function Navbar() {
             // Role dari database
             setRole(profile.role);
             console.log("🎯 Role from database:", profile.role);
-            
-            if (profile.role === 'admin') {
-              console.log("🚀 ADMIN ACCESS - Button will appear!");
-            }
           } else {
             // Jika profile tidak ditemukan, buat otomatis
             console.log("🔄 Profile not found, creating automatically...");
@@ -137,11 +175,29 @@ export default function Navbar() {
             }
           }
 
-          // 🚨 EMERGENCY OVERRIDE: Auto-admin untuk email tertentu
-          const adminEmails = ['admin@cekhealth.com', 'test@example.com', 'rangga@example.com'];
-          if (adminEmails.includes(session.user.email)) {
-            console.log("🚨 EMERGENCY: Hard coding admin role for:", session.user.email);
+          // 🚨 AUTO-ADMIN untuk email tertentu
+          const adminEmails = [
+            'admin@cekhealth.com', 
+            'test@example.com', 
+            'rangga@example.com',
+            'rangapputral22@gmail.com',
+            'admin@gmail.com',
+            'superadmin@cekhealth.com'
+          ];
+          
+          if (adminEmails.includes(session.user.email.toLowerCase())) {
+            console.log("🚨 AUTO-ADMIN: Hard coding admin role for:", session.user.email);
             setRole('admin');
+            
+            // Update database juga jika perlu
+            const { error: updateError } = await supabase
+              .from('profiles')
+              .update({ role: 'admin' })
+              .eq('id', session.user.id);
+              
+            if (!updateError) {
+              console.log("✅ Database updated to admin role");
+            }
           }
           
         } catch (profileError) {
@@ -186,6 +242,13 @@ export default function Navbar() {
       router.push('/');
       onClose();
       
+      toast({
+        title: "Logout berhasil",
+        description: "Anda telah logout dari sistem",
+        status: "success",
+        duration: 3000,
+      });
+      
       // Force reload to clear cache
       setTimeout(() => {
         window.location.reload();
@@ -217,6 +280,11 @@ export default function Navbar() {
     onClose();
   };
 
+  const handleHome = () => {
+    router.push("/");
+    onClose();
+  };
+
   const getDisplayName = () => {
     if (!user) return 'User';
     return user.email?.split('@')[0] || 'User';
@@ -245,7 +313,7 @@ export default function Navbar() {
       >
         {/* Logo */}
         <Flex align="center">
-          <Link href="/" _hover={{ textDecoration: "none" }}>
+          <Link href="/" _hover={{ textDecoration: "none" }} onClick={handleHome}>
             <Image 
               src="/images/Logo.svg" 
               width="100px" 
@@ -506,6 +574,16 @@ export default function Navbar() {
                       Profil Saya
                     </Button>
                     
+                    {/* Home Button */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleHome}
+                      leftIcon={<Text>🏠</Text>}
+                    >
+                      Kembali ke Home
+                    </Button>
+                    
                     {/* Logout Button */}
                     <Button
                       colorScheme="red"
@@ -513,7 +591,6 @@ export default function Navbar() {
                       size="sm"
                       onClick={handleLogout}
                       leftIcon={<Text>🚪</Text>}
-                      isLoading={loading}
                     >
                       Logout
                     </Button>
@@ -552,6 +629,7 @@ export default function Navbar() {
                   <Text>User: {user ? user.email : 'Not logged in'}</Text>
                   <Text>Role: {role || 'Not set'}</Text>
                   <Text>Mock Mode: {isMockMode ? 'Yes' : 'No'}</Text>
+                  <Text>Current Path: {pathname}</Text>
                 </Box>
               )}
             </VStack>

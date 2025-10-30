@@ -15,14 +15,20 @@ import {
   AlertIcon,
   Link,
   useToast,
+  InputGroup,
+  InputRightElement,
+  IconButton,
 } from '@chakra-ui/react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
+import { ViewIcon, ViewOffIcon } from '@chakra-ui/icons';
 
 export default function Register() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const toast = useToast();
@@ -30,10 +36,11 @@ export default function Register() {
   const handleRegister = async (e) => {
     e.preventDefault();
     
+    // Validation
     if (password !== confirmPassword) {
       toast({
-        title: 'Error',
-        description: 'Password dan konfirmasi password tidak cocok',
+        title: 'Password tidak cocok',
+        description: 'Password dan konfirmasi password harus sama',
         status: 'error',
         duration: 5000,
       });
@@ -42,8 +49,18 @@ export default function Register() {
 
     if (password.length < 6) {
       toast({
-        title: 'Error',
+        title: 'Password terlalu pendek',
         description: 'Password minimal 6 karakter',
+        status: 'error',
+        duration: 5000,
+      });
+      return;
+    }
+
+    if (!email.includes('@')) {
+      toast({
+        title: 'Email tidak valid',
+        description: 'Format email harus benar',
         status: 'error',
         duration: 5000,
       });
@@ -53,37 +70,91 @@ export default function Register() {
     setLoading(true);
 
     try {
-      console.log("🔐 Register attempt...", { email });
+      console.log("🔐 Register attempt...", { email: email.trim() });
 
       const { data, error } = await supabase.auth.signUp({
-        email: email.trim(),
+        email: email.trim().toLowerCase(),
         password: password.trim(),
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          data: {
+            full_name: email.split('@')[0]
+          }
+        },
       });
 
       if (error) {
         console.error("❌ Registration error:", error);
+        
+        if (error.message.includes('User already registered')) {
+          toast({
+            title: 'Email sudah terdaftar',
+            description: 'Email ini sudah terdaftar. Silakan login atau gunakan email lain.',
+            status: 'error',
+            duration: 5000,
+          });
+          return;
+        }
+        
         throw error;
       }
 
-      console.log("✅ Registration successful:", data);
+      console.log("✅ Registration response:", data);
+
+      // Check if user was actually created
+      if (data.user && data.user.identities && data.user.identities.length === 0) {
+        toast({
+          title: 'Email sudah terdaftar',
+          description: 'Email ini sudah terdaftar. Silakan login.',
+          status: 'warning',
+          duration: 5000,
+        });
+        return;
+      }
 
       toast({
-        title: 'Registrasi Berhasil!',
-        description: 'Silakan cek email Anda untuk verifikasi',
+        title: 'Registrasi Berhasil! 🎉',
+        description: 'Silakan cek email Anda (termasuk folder spam) untuk verifikasi akun',
         status: 'success',
-        duration: 5000,
+        duration: 7000,
       });
 
-      // Redirect ke login setelah 2 detik
+      // Auto-create profile
+      if (data.user) {
+        try {
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .insert({
+              id: data.user.id,
+              email: data.user.email,
+              role: 'user',
+              full_name: data.user.email.split('@')[0],
+              updated_at: new Date().toISOString()
+            });
+
+          if (profileError) {
+            console.log('Note: Profile creation skipped (might already exist)');
+          }
+        } catch (profileError) {
+          console.log('Note: Profile creation not critical');
+        }
+      }
+
+      // Clear form
+      setEmail('');
+      setPassword('');
+      setConfirmPassword('');
+
+      // Redirect to login after success
       setTimeout(() => {
         router.push('/login');
-      }, 2000);
+      }, 3000);
 
     } catch (error) {
       console.error("❌ Registration failed:", error);
       toast({
         title: 'Registrasi Gagal',
-        description: error.message,
+        description: error.message || 'Terjadi kesalahan saat registrasi',
         status: 'error',
         duration: 5000,
       });
@@ -97,19 +168,12 @@ export default function Register() {
       <VStack spacing={8}>
         <Box textAlign="center">
           <Heading size="xl" color="purple.600" mb={2}>
-            Daftar Akun
+            Daftar Akun Baru
           </Heading>
           <Text color="gray.600">
-            Buat akun baru untuk mengakses CekHealth
+            Buat akun untuk mulai menggunakan CekHealth
           </Text>
         </Box>
-
-        <Alert status="info" borderRadius="md">
-          <AlertIcon />
-          <Text fontSize="sm">
-            Setelah registrasi, silakan cek email untuk verifikasi akun
-          </Text>
-        </Alert>
 
         <Box w="100%" maxW="400px">
           <form onSubmit={handleRegister}>
@@ -122,29 +186,55 @@ export default function Register() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="email@example.com"
                   size="lg"
+                  autoComplete="email"
+                  isDisabled={loading}
                 />
               </FormControl>
 
               <FormControl isRequired>
                 <FormLabel>Password</FormLabel>
-                <Input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Minimal 6 karakter"
-                  size="lg"
-                />
+                <InputGroup size="lg">
+                  <Input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Minimal 6 karakter"
+                    autoComplete="new-password"
+                    isDisabled={loading}
+                  />
+                  <InputRightElement>
+                    <IconButton
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      icon={showPassword ? <ViewOffIcon /> : <ViewIcon />}
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowPassword(!showPassword)}
+                    />
+                  </InputRightElement>
+                </InputGroup>
               </FormControl>
 
               <FormControl isRequired>
                 <FormLabel>Konfirmasi Password</FormLabel>
-                <Input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Ulangi password"
-                  size="lg"
-                />
+                <InputGroup size="lg">
+                  <Input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Ulangi password"
+                    autoComplete="new-password"
+                    isDisabled={loading}
+                  />
+                  <InputRightElement>
+                    <IconButton
+                      aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                      icon={showConfirmPassword ? <ViewOffIcon /> : <ViewIcon />}
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    />
+                  </InputRightElement>
+                </InputGroup>
               </FormControl>
 
               <Button
@@ -153,6 +243,12 @@ export default function Register() {
                 size="lg"
                 w="100%"
                 isLoading={loading}
+                loadingText="Mendaftarkan..."
+                isDisabled={!email || !password || !confirmPassword}
+                bgGradient="linear(to-r, purple.500, pink.500)"
+                _hover={{
+                  bgGradient: "linear(to-r, purple.600, pink.600)",
+                }}
               >
                 Daftar
               </Button>
@@ -166,6 +262,16 @@ export default function Register() {
             </Link>
           </Text>
         </Box>
+
+        <Alert status="info" borderRadius="md">
+          <AlertIcon />
+          <Box>
+            <Text fontWeight="bold">Informasi Penting:</Text>
+            <Text fontSize="sm">• Password minimal 6 karakter</Text>
+            <Text fontSize="sm">• Verifikasi email akan dikirim setelah pendaftaran</Text>
+            <Text fontSize="sm">• Cek folder spam jika email tidak ditemukan</Text>
+          </Box>
+        </Alert>
       </VStack>
     </Container>
   );
