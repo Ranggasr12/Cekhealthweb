@@ -41,6 +41,8 @@ import {
   Image,
   AspectRatio,
   Icon,
+  Textarea,
+  Progress,
 } from "@chakra-ui/react";
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
@@ -108,6 +110,36 @@ const VideoIcon = (props) => (
   </svg>
 );
 
+const EssayIcon = (props) => (
+  <svg
+    stroke="currentColor"
+    fill="currentColor"
+    strokeWidth="0"
+    viewBox="0 0 24 24"
+    height="1em"
+    width="1em"
+    {...props}
+  >
+    <path fill="none" d="M0 0h24v24H0z"></path>
+    <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"></path>
+  </svg>
+);
+
+const YesNoIcon = (props) => (
+  <svg
+    stroke="currentColor"
+    fill="currentColor"
+    strokeWidth="0"
+    viewBox="0 0 24 24"
+    height="1em"
+    width="1em"
+    {...props}
+  >
+    <path fill="none" d="M0 0h24v24H0z"></path>
+    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path>
+  </svg>
+);
+
 export default function FormPage() {
   const router = useRouter();
   const toast = useToast();
@@ -126,12 +158,15 @@ export default function FormPage() {
     telepon: ''
   });
   const [jawaban, setJawaban] = useState({});
+  const [currentStep, setCurrentStep] = useState(0);
+  const [progress, setProgress] = useState(0);
 
   useEffect(() => {
     setIsClient(true);
     fetchPertanyaan();
   }, []);
 
+  // Fetch pertanyaan dari database
   const fetchPertanyaan = async () => {
     try {
       const { data, error } = await supabase
@@ -154,6 +189,7 @@ export default function FormPage() {
     }
   };
 
+  // Fetch materi penyakit
   const fetchMateriPenyakit = async (penyakitNames) => {
     setLoadingMateri(true);
     try {
@@ -186,6 +222,7 @@ export default function FormPage() {
     }
   };
 
+  // Handler untuk input data diri
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
       ...prev,
@@ -193,6 +230,7 @@ export default function FormPage() {
     }));
   };
 
+  // Handler untuk jawaban ya/tidak
   const handleJawabanChange = (pertanyaanId, value) => {
     setJawaban(prev => ({
       ...prev,
@@ -200,10 +238,68 @@ export default function FormPage() {
     }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  // Handler untuk jawaban essay
+  const handleEssayAnswer = (pertanyaanId, value) => {
+    setJawaban(prev => ({
+      ...prev,
+      [pertanyaanId]: value
+    }));
+  };
+
+  // Fungsi analisis jawaban essay
+  const analyzeEssayAnswer = (jawabanText, keywords) => {
+    if (!jawabanText || !keywords) return false;
     
-    const unansweredQuestions = pertanyaan.filter(q => !jawaban[q.id]);
+    const keywordList = keywords.split(',').map(k => k.trim().toLowerCase());
+    const jawabanLower = jawabanText.toLowerCase();
+    
+    // Cek apakah ada keyword yang match
+    return keywordList.some(keyword => jawabanLower.includes(keyword));
+  };
+
+  // Validasi form sebelum submit
+  const validateForm = () => {
+    // Validasi data diri
+    if (!formData.nama.trim()) {
+      toast({
+        title: 'Data tidak lengkap',
+        description: 'Nama lengkap harus diisi',
+        status: 'warning',
+        duration: 3000,
+      });
+      return false;
+    }
+
+    if (!formData.usia || formData.usia < 1 || formData.usia > 120) {
+      toast({
+        title: 'Data tidak lengkap',
+        description: 'Usia harus antara 1-120 tahun',
+        status: 'warning',
+        duration: 3000,
+      });
+      return false;
+    }
+
+    if (!formData.jenisKelamin) {
+      toast({
+        title: 'Data tidak lengkap',
+        description: 'Jenis kelamin harus dipilih',
+        status: 'warning',
+        duration: 3000,
+      });
+      return false;
+    }
+
+    // Validasi pertanyaan
+    const unansweredQuestions = pertanyaan.filter(q => {
+      const answer = jawaban[q.id];
+      if (q.tipe_pertanyaan === 'essay') {
+        return !answer || answer.trim().length === 0;
+      } else {
+        return !answer;
+      }
+    });
+
     if (unansweredQuestions.length > 0) {
       toast({
         title: 'Pertanyaan Belum Lengkap',
@@ -211,8 +307,17 @@ export default function FormPage() {
         status: 'warning',
         duration: 5000,
       });
-      return;
+      return false;
     }
+
+    return true;
+  };
+
+  // Submit form
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!validateForm()) return;
 
     console.log("Form submitted:", { formData, jawaban });
     setShowResults(true);
@@ -226,12 +331,13 @@ export default function FormPage() {
       await fetchMateriPenyakit(detectedDiseaseNames);
     }
 
+    // Simpan hasil ke database
     try {
       const { error } = await supabase
         .from('hasil_diagnosa')
         .insert([{
           nama: formData.nama,
-          usia: formData.usia,
+          usia: parseInt(formData.usia),
           jenis_kelamin: formData.jenisKelamin,
           email: formData.email,
           telepon: formData.telepon,
@@ -241,17 +347,30 @@ export default function FormPage() {
         }]);
 
       if (error) throw error;
+      
+      toast({
+        title: 'Berhasil',
+        description: 'Hasil skrining telah disimpan',
+        status: 'success',
+        duration: 3000,
+      });
     } catch (error) {
       console.error('Error saving results:', error);
+      toast({
+        title: 'Error',
+        description: 'Gagal menyimpan hasil skrining',
+        status: 'error',
+        duration: 5000,
+      });
     }
   };
 
+  // Kalkulasi hasil
   const calculateResults = () => {
     const scores = {};
     const penyakitMap = {};
-    
-    // Kumpulkan semua saran dari pertanyaan yang dijawab "ya"
     const semuaSaran = [];
+    const detailAnalisis = [];
     
     pertanyaan.forEach(question => {
       const penyakit = question.jenis_penyakit;
@@ -261,23 +380,55 @@ export default function FormPage() {
       }
       
       const jawabanValue = jawaban[question.id];
-      if (jawabanValue === 'ya') {
-        scores[penyakit] += 1;
-        
-        // Kumpulkan saran jika ada dan jawaban "ya"
-        if (question.saran) {
-          semuaSaran.push({
-            saran: question.saran,
-            penyakit: penyakit
-          });
+      let scoreDitambahkan = 0;
+      let analisis = '';
+      
+      if (question.tipe_pertanyaan === 'ya_tidak') {
+        // Untuk pertanyaan ya/tidak
+        if (jawabanValue === 'ya') {
+          scoreDitambahkan = question.score;
+          scores[penyakit] += scoreDitambahkan;
+          if (question.saran) {
+            semuaSaran.push({
+              saran: question.saran,
+              penyakit: penyakit
+            });
+          }
+          analisis = `Jawaban "Ya" - Score: +${question.score}`;
+        } else {
+          analisis = `Jawaban "Tidak" - Score: +0`;
+        }
+      } else if (question.tipe_pertanyaan === 'essay') {
+        // Untuk pertanyaan essay - analisis keyword
+        if (jawabanValue && analyzeEssayAnswer(jawabanValue, question.keyword_jawaban)) {
+          scoreDitambahkan = question.score;
+          scores[penyakit] += scoreDitambahkan;
+          if (question.saran) {
+            semuaSaran.push({
+              saran: question.saran,
+              penyakit: penyakit
+            });
+          }
+          analisis = `Essay - Keyword terdeteksi - Score: +${question.score}`;
+        } else {
+          analisis = `Essay - Keyword tidak terdeteksi - Score: +0`;
         }
       }
       
       penyakitMap[penyakit].push({
         pertanyaan: question.pertanyaan_text,
         jawaban: jawabanValue,
+        tipe: question.tipe_pertanyaan,
         saran: question.saran,
-        indikasi: question.indikasi
+        indikasi: question.indikasi,
+        score: scoreDitambahkan
+      });
+
+      detailAnalisis.push({
+        pertanyaan: question.pertanyaan_text,
+        tipe: question.tipe_pertanyaan,
+        analisis: analisis,
+        score: scoreDitambahkan
       });
     });
 
@@ -288,18 +439,18 @@ export default function FormPage() {
       const totalQuestions = penyakitMap[penyakit].length;
       const percentage = (score / totalQuestions) * 100;
       
-      if (percentage >= 50) {
+      if (percentage >= 40) { // Threshold diturunkan untuk sensitivitas lebih tinggi
         // Filter saran untuk penyakit ini saja
         const saranPenyakit = semuaSaran.filter(s => s.penyakit === penyakit).map(s => s.saran);
         
         detectedDiseases.push({
           name: penyakit,
-          confidence: percentage >= 70 ? "Tinggi" : "Sedang",
+          confidence: percentage >= 70 ? "Tinggi" : percentage >= 50 ? "Sedang" : "Rendah",
           score: score,
           total: totalQuestions,
           percentage: percentage,
           questions: penyakitMap[penyakit],
-          saran: saranPenyakit, // TAMBAHKAN SARAN DI SINI
+          saran: saranPenyakit,
           penanganan: getPenanganan(penyakit, percentage),
           rekomendasi: getRekomendasi(penyakit, percentage)
         });
@@ -315,7 +466,7 @@ export default function FormPage() {
         total: 0,
         percentage: 0,
         questions: [],
-        saran: [],
+        saran: ["Pertahankan pola hidup sehat yang sudah Anda jalani"],
         penanganan: [
           "Teruskan pola hidup sehat yang sudah Anda jalani",
           "Monitor kesehatan secara berkala",
@@ -333,124 +484,166 @@ export default function FormPage() {
     return {
       scores,
       detectedDiseases,
-      summary: `Terdeteksi ${detectedDiseases.length} potensi kondisi kesehatan`
+      detailAnalisis,
+      summary: `Terdeteksi ${detectedDiseases.length} potensi kondisi kesehatan`,
+      totalPertanyaan: pertanyaan.length,
+      pertanyaanTerjawab: Object.keys(jawaban).length
     };
   };
 
+  // Data penanganan berdasarkan penyakit
   const getPenanganan = (penyakit, percentage) => {
     const penanganan = {
       'Diabetes': [
         "Segera konsultasi dengan dokter spesialis penyakit dalam",
         "Lakukan pemeriksaan gula darah lengkap (GDP, 2JPP, HbA1c)",
         "Mulai pengaturan pola makan dengan mengurangi asupan gula dan karbohidrat sederhana",
-        "Monitor gula darah mandiri secara rutin"
+        "Monitor gula darah mandiri secara rutin",
+        "Lakukan aktivitas fisik ringan secara teratur"
       ],
       'Hipertensi': [
         "Konsultasi dengan dokter untuk pengukuran tekanan darah yang akurat",
         "Lakukan pemantauan tekanan darah harian",
         "Mulai terapi non-farmakologi dengan mengurangi garam",
-        "Evaluasi faktor risiko kardiovaskular lainnya"
+        "Evaluasi faktor risiko kardiovaskular lainnya",
+        "Kelola stres dengan teknik relaksasi"
       ],
       'Jantung': [
         "Segera konsultasi dengan dokter spesialis jantung",
         "Lakukan pemeriksaan EKG dan ekokardiografi",
         "Evaluasi faktor risiko jantung secara menyeluruh",
-        "Mulai modifikasi gaya hidup jantung sehat"
+        "Mulai modifikasi gaya hidup jantung sehat",
+        "Hindari aktivitas berat mendadak"
       ],
       'Kolesterol': [
         "Konsultasi dengan dokter untuk pemeriksaan lipid profile",
         "Lakukan pemeriksaan kolesterol lengkap (LDL, HDL, Trigliserida)",
         "Mulai diet rendah lemak jenuh dan kolesterol",
-        "Tingkatkan aktivitas fisik secara bertahap"
+        "Tingkatkan aktivitas fisik secara bertahap",
+        "Perbanyak konsumsi serat dan omega-3"
       ],
       'Asma': [
         "Konsultasi dengan dokter spesialis paru",
         "Lakukan tes fungsi paru (spirometri)",
         "Identifikasi dan hindari pemicu alergi",
-        "Pelajari teknik pernapasan yang benar"
+        "Pelajari teknik pernapasan yang benar",
+        "Selalu siapkan inhaler emergency"
       ],
       'Gastrointestinal': [
         "Konsultasi dengan dokter spesialis pencernaan",
         "Lakukan pemeriksaan penunjang jika diperlukan",
         "Modifikasi pola makan menjadi lebih teratur",
-        "Hindari makanan yang memicu gejala"
-      ],
-      'Mental Health': [
-        "Konsultasi dengan psikolog atau psikiater",
-        "Lakukan assessment kesehatan mental lengkap",
-        "Mulai terapi perilaku kognitif jika diperlukan",
-        "Bangun sistem dukungan sosial yang kuat"
+        "Hindari makanan yang memicu gejala",
+        "Kelola stres dengan baik"
       ],
       'Umum': [
         "Konsultasi dengan dokter untuk evaluasi menyeluruh",
         "Lakukan pemeriksaan laboratorium dasar",
         "Terapkan pola hidup sehat secara konsisten",
-        "Monitor perkembangan gejala secara berkala"
+        "Monitor perkembangan gejala secara berkala",
+        "Istirahat yang cukup dan kelola stres"
       ]
     };
 
     return penanganan[penyakit] || penanganan['Umum'];
   };
 
+  // Data rekomendasi berdasarkan penyakit
   const getRekomendasi = (penyakit, percentage) => {
     const rekomendasi = {
       'Diabetes': [
         "Kontrol rutin ke dokter setiap 3 bulan sekali",
         "Ikuti program edukasi diabetes",
         "Bergabung dengan komunitas diabetes untuk dukungan",
-        "Pelajari cara menghitung indeks glikemik makanan"
+        "Pelajari cara menghitung indeks glikemik makanan",
+        "Monitor kaki setiap hari untuk luka atau lecet"
       ],
       'Hipertensi': [
         "Lakukan pemeriksaan tekanan darah mingguan",
         "Ikuti program pengelolaan stres",
         "Kurangi konsumsi kopi dan alkohol",
-        "Tingkatkan konsumsi makanan kaya kalium"
+        "Tingkatkan konsumsi makanan kaya kalium",
+        "Jaga berat badan ideal"
       ],
       'Jantung': [
         "Ikuti program rehabilitasi jantung",
         "Pelajari tanda-tanda darurat jantung",
         "Bawa obat emergency jika diperlukan",
-        "Hindari aktivitas berat mendadak"
+        "Hindari aktivitas berat mendadak",
+        "Kontrol faktor risiko seperti diabetes dan kolesterol"
       ],
       'Kolesterol': [
         "Perbanyak konsumsi serat larut air",
         "Tingkatkan konsumsi omega-3",
         "Kontrol berat badan ideal",
-        "Hindari makanan cepat saji"
+        "Hindari makanan cepat saji",
+        "Olahraga teratur 3-5 kali seminggu"
       ],
       'Asma': [
         "Selalu bawa inhaler emergency",
         "Hindari paparan asap dan polusi",
         "Gunakan masker di tempat berdebu",
-        "Lakukan pemanasan sebelum olahraga"
+        "Lakukan pemanasan sebelum olahraga",
+        "Jaga kebersihan lingkungan rumah"
       ],
       'Gastrointestinal': [
         "Makan dengan porsi kecil tapi sering",
         "Kunyah makanan secara perlahan",
         "Hindari berbaring setelah makan",
-        "Kelola stres dengan baik"
-      ],
-      'Mental Health': [
-        "Praktikkan meditasi rutin",
-        "Jaga komunikasi dengan keluarga",
-        "Lakukan hobi yang menyenangkan",
-        "Cukupi waktu tidur 7-8 jam sehari"
+        "Kelola stres dengan baik",
+        "Hindari makanan pedas dan asam berlebihan"
       ],
       'Umum': [
         "Lakukan medical check-up tahunan",
         "Terapkan pola makan seimbang",
         "Olahraga teratur 3-5 kali seminggu",
-        "Istirahat yang cukup dan kelola stres"
+        "Istirahat yang cukup dan kelola stres",
+        "Hindari rokok dan alkohol berlebihan"
       ]
     };
 
     return rekomendasi[penyakit] || rekomendasi['Umum'];
   };
 
+  // Navigasi
   const handleBack = () => {
-    router.push('/');
+    if (currentStep > 0) {
+      setCurrentStep(currentStep - 1);
+    } else {
+      router.push('/');
+    }
   };
 
+  const handleNext = () => {
+    if (currentStep === 0) {
+      // Validasi data diri sebelum lanjut
+      if (!formData.nama.trim() || !formData.usia || !formData.jenisKelamin) {
+        toast({
+          title: 'Data tidak lengkap',
+          description: 'Harap lengkapi data diri terlebih dahulu',
+          status: 'warning',
+          duration: 3000,
+        });
+        return;
+      }
+    }
+    setCurrentStep(currentStep + 1);
+  };
+
+  // Progress calculation
+  useEffect(() => {
+    if (currentStep === 0) {
+      setProgress(10);
+    } else if (currentStep === 1) {
+      const answered = Object.keys(jawaban).length;
+      const total = pertanyaan.length;
+      setProgress(10 + (answered / total) * 80);
+    } else {
+      setProgress(100);
+    }
+  }, [currentStep, jawaban, pertanyaan.length]);
+
+  // Download hasil sebagai text
   const handleDownloadResults = () => {
     const results = calculateResults();
     const content = `
@@ -461,15 +654,17 @@ Data Pasien:
 - Nama: ${formData.nama}
 - Usia: ${formData.usia}
 - Jenis Kelamin: ${formData.jenisKelamin}
-- Email: ${formData.email}
-- Telepon: ${formData.telepon}
+- Email: ${formData.email || '-'}
+- Telepon: ${formData.telepon || '-'}
 - Tanggal Pemeriksaan: ${new Date().toLocaleDateString('id-ID')}
 
 ${results.summary}
 
 ${results.detectedDiseases.map(disease => `
 ${disease.name.toUpperCase()}
-- Status: ${disease.confidence}
+- Tingkat Keyakinan: ${disease.confidence}
+- Skor: ${disease.score} dari ${disease.total} pertanyaan
+- Persentase: ${disease.percentage.toFixed(1)}%
 
 ${disease.saran.length > 0 ? `Saran Khusus:\n${disease.saran.map(saran => `  💡 ${saran}`).join('\n')}\n` : ''}
 
@@ -478,6 +673,13 @@ ${disease.penanganan.map(item => `  • ${item}`).join('\n')}
 
 Rekomendasi Jangka Panjang:
 ${disease.rekomendasi.map(item => `  • ${item}`).join('\n')}
+`).join('\n' + '='.repeat(40) + '\n')}
+
+Detail Analisis:
+${results.detailAnalisis.map((item, index) => `
+${index + 1}. ${item.pertanyaan}
+   Tipe: ${item.tipe === 'essay' ? 'Essay' : 'Ya/Tidak'}
+   ${item.analisis}
 `).join('\n')}
 
 Catatan:
@@ -505,6 +707,7 @@ www.cekhealth.com
     });
   };
 
+  // Download hasil sebagai PDF
   const handleDownloadPDF = () => {
     const results = calculateResults();
     
@@ -567,9 +770,13 @@ www.cekhealth.com
       
       doc.setFontSize(10);
       doc.text(`Status: ${disease.confidence}`, 20, yPosition);
+      yPosition += 5;
+      doc.text(`Skor: ${disease.score} dari ${disease.total} pertanyaan`, 20, yPosition);
+      yPosition += 5;
+      doc.text(`Persentase: ${disease.percentage.toFixed(1)}%`, 20, yPosition);
       yPosition += 10;
       
-      // TAMBAHKAN SARAN KE PDF
+      // Saran Khusus
       if (disease.saran.length > 0) {
         doc.text('SARAN KHUSUS:', 20, yPosition);
         yPosition += 5;
@@ -586,6 +793,7 @@ www.cekhealth.com
         yPosition += 5;
       }
       
+      // Penanganan Segera
       doc.text('PENANGANAN SEGERA:', 20, yPosition);
       yPosition += 5;
       
@@ -600,6 +808,7 @@ www.cekhealth.com
       
       yPosition += 5;
       
+      // Rekomendasi Jangka Panjang
       doc.text('REKOMENDASI JANGKA PANJANG:', 20, yPosition);
       yPosition += 5;
       
@@ -688,7 +897,7 @@ www.cekhealth.com
     </Card>
   );
 
-  // Komponen untuk menampilkan materi pembelajaran - HANYA VIDEO
+  // Komponen untuk menampilkan materi pembelajaran
   const MateriSection = ({ penyakit }) => {
     const materi = materiPenyakit[penyakit.name] || { videos: [] };
     
@@ -719,6 +928,58 @@ www.cekhealth.com
     );
   };
 
+  // Render pertanyaan berdasarkan tipe
+  const renderQuestion = (question, index) => {
+    if (question.tipe_pertanyaan === 'essay') {
+      return (
+        <FormControl key={question.id} mb={6} isRequired>
+          <FormLabel fontSize="lg" fontWeight="medium" mb={4}>
+            <HStack>
+              <Icon as={EssayIcon} color="purple.500" />
+              <Text>{index + 1}. {question.pertanyaan_text}</Text>
+            </HStack>
+          </FormLabel>
+          <Textarea
+            value={jawaban[question.id] || ''}
+            onChange={(e) => handleEssayAnswer(question.id, e.target.value)}
+            placeholder="Jawab dengan detail pengalaman atau gejala yang Anda rasakan..."
+            rows={4}
+            size="lg"
+          />
+          {question.keyword_jawaban && (
+            <Text fontSize="sm" color="gray.500" mt={2}>
+              💡 Tips: Ceritakan pengalaman Anda secara detail untuk analisis yang lebih akurat
+            </Text>
+          )}
+        </FormControl>
+      );
+    } else {
+      return (
+        <FormControl key={question.id} mb={6} isRequired>
+          <FormLabel fontSize="lg" fontWeight="medium" mb={4}>
+            <HStack>
+              <Icon as={YesNoIcon} color="green.500" />
+              <Text>{index + 1}. {question.pertanyaan_text}</Text>
+            </HStack>
+          </FormLabel>
+          <RadioGroup
+            value={jawaban[question.id] || ''}
+            onChange={(val) => handleJawabanChange(question.id, val)}
+          >
+            <Stack direction="row" spacing={8}>
+              <Radio value="ya" size="lg" colorScheme="green">
+                Ya
+              </Radio>
+              <Radio value="tidak" size="lg" colorScheme="red">
+                Tidak
+              </Radio>
+            </Stack>
+          </RadioGroup>
+        </FormControl>
+      );
+    }
+  };
+
   // Tampilkan loading sampai client-side siap
   if (!isClient) {
     return (
@@ -733,31 +994,7 @@ www.cekhealth.com
     );
   }
 
-  // PERBAIKAN: renderQuestion TANPA tulisan ikon lampu
-  const renderQuestion = (question, index) => (
-    <FormControl key={question.id} mb={6} isRequired>
-      <FormLabel fontSize="lg" fontWeight="medium" mb={4}>
-        {index + 1}. {question.pertanyaan_text}
-      </FormLabel>
-      <RadioGroup
-        value={jawaban[question.id] || ''}
-        onChange={(val) => handleJawabanChange(question.id, val)}
-      >
-        <Stack direction="row" spacing={8}>
-          <Radio value="ya" size="lg" colorScheme="purple">
-            Ya
-          </Radio>
-          <Radio value="tidak" size="lg" colorScheme="purple">
-            Tidak
-          </Radio>
-        </Stack>
-      </RadioGroup>
-      
-      {/* TULISAN IKON LAMPU DIHAPUS DARI SINI */}
-    </FormControl>
-  );
-
-  // TAMPILAN HASIL ANALISIS - DENGAN SARAN BARU
+  // TAMPILAN HASIL ANALISIS
   if (showResults) {
     const results = calculateResults();
 
@@ -774,7 +1011,7 @@ www.cekhealth.com
               alignSelf="flex-start"
               mb={4}
             >
-              Kembali ke Home
+              Kembali ke Form
             </Button>
 
             <Box textAlign="center">
@@ -785,6 +1022,34 @@ www.cekhealth.com
                 Berdasarkan jawaban yang Anda berikan
               </Text>
             </Box>
+
+            {/* Statistik Ringkas */}
+            <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4} mb={6}>
+              <Card>
+                <CardBody textAlign="center">
+                  <Text fontSize="2xl" fontWeight="bold" color="blue.600">
+                    {results.totalPertanyaan}
+                  </Text>
+                  <Text color="gray.600">Total Pertanyaan</Text>
+                </CardBody>
+              </Card>
+              <Card>
+                <CardBody textAlign="center">
+                  <Text fontSize="2xl" fontWeight="bold" color="green.600">
+                    {results.pertanyaanTerjawab}
+                  </Text>
+                  <Text color="gray.600">Pertanyaan Terjawab</Text>
+                </CardBody>
+              </Card>
+              <Card>
+                <CardBody textAlign="center">
+                  <Text fontSize="2xl" fontWeight="bold" color="orange.600">
+                    {results.detectedDiseases.length}
+                  </Text>
+                  <Text color="gray.600">Kondisi Terdeteksi</Text>
+                </CardBody>
+              </Card>
+            </SimpleGrid>
 
             {/* Hasil Skrining */}
             <Card borderRadius="xl" boxShadow="lg" border="2px" borderColor="purple.200">
@@ -801,7 +1066,7 @@ www.cekhealth.com
                         <HStack justify="space-between" mb={3}>
                           <Heading size="lg" color={disease.confidence === "Tinggi" ? "red.600" : disease.confidence === "Sedang" ? "orange.600" : "green.600"}>
                             {disease.confidence === "Tinggi" ? "⚠️ " : disease.confidence === "Sedang" ? "🔸 " : "✅ "}
-                            Anda Terindikasi {disease.name}
+                            {disease.name}
                           </Heading>
                           <Badge 
                             colorScheme={disease.confidence === "Tinggi" ? "red" : disease.confidence === "Sedang" ? "orange" : "green"} 
@@ -813,7 +1078,17 @@ www.cekhealth.com
                           </Badge>
                         </HStack>
 
-                        {/* PERBAIKAN: TAMBAHKAN SARAN DI SINI */}
+                        {/* Statistik Penyakit */}
+                        <HStack spacing={4} mb={4}>
+                          <Badge colorScheme="blue">
+                            Skor: {disease.score}/{disease.total}
+                          </Badge>
+                          <Badge colorScheme="purple">
+                            {disease.percentage.toFixed(1)}%
+                          </Badge>
+                        </HStack>
+
+                        {/* Saran Khusus */}
                         {disease.saran.length > 0 && (
                           <Box mb={4}>
                             <Text fontWeight="bold" color="gray.700" mb={2}>
@@ -829,6 +1104,7 @@ www.cekhealth.com
                           </Box>
                         )}
                         
+                        {/* Penanganan */}
                         <Box mb={4}>
                           <Text fontWeight="bold" color="gray.700" mb={2}>
                             🎯 Penanganan yang Disarankan:
@@ -842,6 +1118,7 @@ www.cekhealth.com
                           </VStack>
                         </Box>
 
+                        {/* Rekomendasi */}
                         <Box>
                           <Text fontWeight="bold" color="gray.700" mb={2}>
                             📝 Rekomendasi Jangka Panjang:
@@ -856,7 +1133,7 @@ www.cekhealth.com
                         </Box>
                       </Box>
                       
-                      {/* Materi Pembelajaran - HANYA VIDEO */}
+                      {/* Materi Pembelajaran */}
                       {disease.name !== "Tidak Terdeteksi Penyakit Serius" && (
                         <MateriSection penyakit={disease} />
                       )}
@@ -888,6 +1165,7 @@ www.cekhealth.com
               </Button>
             </HStack>
 
+            {/* Alert Status */}
             <Alert status={results.detectedDiseases[0].confidence === "Tinggi" ? "error" : results.detectedDiseases[0].confidence === "Sedang" ? "warning" : "success"} borderRadius="md">
               <AlertIcon />
               <Box>
@@ -913,11 +1191,24 @@ www.cekhealth.com
     );
   }
 
-  // TAMPILAN FORM (jika showResults = false)
+  // TAMPILAN MULTI-STEP FORM
   return (
     <Box bg="white" minH="100vh" pt={0}>
       <Container maxW="container.md" py={10}>
         <VStack spacing={8} align="stretch">
+          {/* Progress Bar */}
+          <Box>
+            <HStack justify="space-between" mb={2}>
+              <Text fontSize="sm" color="gray.600">
+                {currentStep === 0 ? 'Data Diri' : currentStep === 1 ? 'Pertanyaan Kesehatan' : 'Selesai'}
+              </Text>
+              <Text fontSize="sm" color="gray.600">
+                {Math.round(progress)}%
+              </Text>
+            </HStack>
+            <Progress value={progress} colorScheme="purple" size="lg" borderRadius="full" />
+          </Box>
+
           {/* Tombol Kembali */}
           <Button
             variant="outline"
@@ -926,16 +1217,18 @@ www.cekhealth.com
             onClick={handleBack}
             alignSelf="flex-start"
           >
-            Kembali ke Home
+            Kembali
           </Button>
 
           {/* Header */}
           <Box textAlign="center">
             <Heading as="h1" size="2xl" mb={3} color="purple.800">
-              Skrining Kesehatan Mandiri
+              {currentStep === 0 ? 'Data Diri' : 'Pertanyaan Kesehatan'}
             </Heading>
             <Text color="gray.600" fontSize="lg">
-              Jawab semua pertanyaan berikut dengan jujur
+              {currentStep === 0 
+                ? 'Lengkapi data diri Anda terlebih dahulu' 
+                : 'Jawab semua pertanyaan berikut dengan jujur dan detail'}
             </Text>
           </Box>
 
@@ -944,125 +1237,153 @@ www.cekhealth.com
             <CardBody>
               <form onSubmit={handleSubmit}>
                 <VStack spacing={6}>
-                  {/* Data Diri */}
-                  <Box w="100%">
-                    <Heading size="md" color="purple.700" mb={4}>
-                      Data Diri
-                    </Heading>
-                    
-                    <FormControl isRequired mb={4}>
-                      <FormLabel fontSize="lg" fontWeight="medium">
-                        Nama Lengkap
-                      </FormLabel>
-                      <Input
-                        value={formData.nama}
-                        onChange={(e) => handleInputChange('nama', e.target.value)}
-                        placeholder="Masukkan nama lengkap Anda"
-                        size="lg"
-                      />
-                    </FormControl>
-
-                    <FormControl isRequired mb={4}>
-                      <FormLabel fontSize="lg" fontWeight="medium">
-                        Usia
-                      </FormLabel>
-                      <NumberInput
-                        value={formData.usia}
-                        onChange={(value) => handleInputChange('usia', value)}
-                        min={1}
-                        max={120}
-                      >
-                        <NumberInputField
-                          placeholder="Masukkan usia Anda"
+                  {/* STEP 1: Data Diri */}
+                  {currentStep === 0 && (
+                    <Box w="100%">
+                      <Heading size="md" color="purple.700" mb={4}>
+                        Data Diri
+                      </Heading>
+                      
+                      <FormControl isRequired mb={4}>
+                        <FormLabel fontSize="lg" fontWeight="medium">
+                          Nama Lengkap
+                        </FormLabel>
+                        <Input
+                          value={formData.nama}
+                          onChange={(e) => handleInputChange('nama', e.target.value)}
+                          placeholder="Masukkan nama lengkap Anda"
                           size="lg"
                         />
-                        <NumberInputStepper>
-                          <NumberIncrementStepper />
-                          <NumberDecrementStepper />
-                        </NumberInputStepper>
-                      </NumberInput>
-                    </FormControl>
+                      </FormControl>
 
-                    <FormControl isRequired mb={4}>
-                      <FormLabel fontSize="lg" fontWeight="medium">
-                        Jenis Kelamin
-                      </FormLabel>
-                      <RadioGroup
-                        value={formData.jenisKelamin || ''}
-                        onChange={(value) => handleInputChange('jenisKelamin', value)}
-                      >
-                        <Stack direction="row" spacing={8}>
-                          <Radio value="laki-laki" size="lg" colorScheme="purple">
-                            Laki-laki
-                          </Radio>
-                          <Radio value="perempuan" size="lg" colorScheme="purple">
-                            Perempuan
-                          </Radio>
-                        </Stack>
-                      </RadioGroup>
-                    </FormControl>
+                      <FormControl isRequired mb={4}>
+                        <FormLabel fontSize="lg" fontWeight="medium">
+                          Usia
+                        </FormLabel>
+                        <NumberInput
+                          value={formData.usia}
+                          onChange={(value) => handleInputChange('usia', value)}
+                          min={1}
+                          max={120}
+                        >
+                          <NumberInputField
+                            placeholder="Masukkan usia Anda"
+                            size="lg"
+                          />
+                          <NumberInputStepper>
+                            <NumberIncrementStepper />
+                            <NumberDecrementStepper />
+                          </NumberInputStepper>
+                        </NumberInput>
+                      </FormControl>
 
-                    <FormControl mb={4}>
-                      <FormLabel fontSize="lg" fontWeight="medium">
-                        Email
-                      </FormLabel>
-                      <Input
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => handleInputChange('email', e.target.value)}
-                        placeholder="email@contoh.com"
-                        size="lg"
-                      />
-                    </FormControl>
+                      <FormControl isRequired mb={4}>
+                        <FormLabel fontSize="lg" fontWeight="medium">
+                          Jenis Kelamin
+                        </FormLabel>
+                        <RadioGroup
+                          value={formData.jenisKelamin || ''}
+                          onChange={(value) => handleInputChange('jenisKelamin', value)}
+                        >
+                          <Stack direction="row" spacing={8}>
+                            <Radio value="laki-laki" size="lg" colorScheme="purple">
+                              Laki-laki
+                            </Radio>
+                            <Radio value="perempuan" size="lg" colorScheme="purple">
+                              Perempuan
+                            </Radio>
+                          </Stack>
+                        </RadioGroup>
+                      </FormControl>
 
-                    <FormControl>
-                      <FormLabel fontSize="lg" fontWeight="medium">
-                        Nomor Telepon
-                      </FormLabel>
-                      <Input
-                        value={formData.telepon}
-                        onChange={(e) => handleInputChange('telepon', e.target.value)}
-                        placeholder="08xxxxxxxxxx"
-                        size="lg"
-                      />
-                    </FormControl>
-                  </Box>
+                      <FormControl mb={4}>
+                        <FormLabel fontSize="lg" fontWeight="medium">
+                          Email
+                        </FormLabel>
+                        <Input
+                          type="email"
+                          value={formData.email}
+                          onChange={(e) => handleInputChange('email', e.target.value)}
+                          placeholder="email@contoh.com"
+                          size="lg"
+                        />
+                      </FormControl>
 
-                  {/* Pertanyaan Gejala */}
-                  <Box w="100%">
-                    <Heading size="md" color="purple.700" mb={4}>
-                      Pertanyaan Gejala Kesehatan
-                    </Heading>
+                      <FormControl>
+                        <FormLabel fontSize="lg" fontWeight="medium">
+                          Nomor Telepon
+                        </FormLabel>
+                        <Input
+                          value={formData.telepon}
+                          onChange={(e) => handleInputChange('telepon', e.target.value)}
+                          placeholder="08xxxxxxxxxx"
+                          size="lg"
+                        />
+                      </FormControl>
+                    </Box>
+                  )}
 
-                    {loadingPertanyaan ? (
-                      <VStack spacing={4}>
-                        {[1, 2, 3, 4, 5].map((item) => (
-                          <Skeleton key={item} height="100px" width="100%" borderRadius="md" />
-                        ))}
-                      </VStack>
-                    ) : (
-                      <VStack spacing={6}>
-                        {pertanyaan.map((question, index) => renderQuestion(question, index))}
-                      </VStack>
-                    )}
-                  </Box>
+                  {/* STEP 2: Pertanyaan Kesehatan */}
+                  {currentStep === 1 && (
+                    <Box w="100%">
+                      <Heading size="md" color="purple.700" mb={4}>
+                        Pertanyaan Kesehatan
+                        <Text fontSize="sm" color="gray.600" fontWeight="normal" mt={1}>
+                          {Object.keys(jawaban).length} dari {pertanyaan.length} pertanyaan terjawab
+                        </Text>
+                      </Heading>
 
+                      {loadingPertanyaan ? (
+                        <VStack spacing={4}>
+                          {[1, 2, 3, 4, 5].map((item) => (
+                            <Skeleton key={item} height="100px" width="100%" borderRadius="md" />
+                          ))}
+                        </VStack>
+                      ) : (
+                        <VStack spacing={6}>
+                          {pertanyaan.map((question, index) => renderQuestion(question, index))}
+                        </VStack>
+                      )}
+                    </Box>
+                  )}
+
+                  {/* Informasi */}
                   <Alert status="info" borderRadius="md">
                     <AlertIcon />
-                    Data yang Anda berikan akan dijaga kerahasiaannya dan digunakan hanya untuk tujuan skrining kesehatan.
+                    <Box>
+                      <Text fontWeight="bold" mb={1}>Informasi Penting</Text>
+                      <Text fontSize="sm">
+                        {currentStep === 0 
+                          ? 'Data yang Anda berikan akan dijaga kerahasiaannya dan digunakan hanya untuk tujuan skrining kesehatan.'
+                          : 'Jawablah dengan jujur dan detail. Untuk pertanyaan essay, ceritakan pengalaman Anda secara menyeluruh untuk hasil yang lebih akurat.'}
+                      </Text>
+                    </Box>
                   </Alert>
 
-                  {/* Submit Button */}
-                  <Button
-                    type="submit"
-                    w="100%"
-                    size="lg"
-                    colorScheme="purple"
-                    isLoading={loadingPertanyaan}
-                    isDisabled={pertanyaan.length === 0}
-                  >
-                    {pertanyaan.length === 0 ? 'Memuat Pertanyaan...' : 'Lihat Hasil Skrining'}
-                  </Button>
+                  {/* Navigation Buttons */}
+                  <HStack w="100%" spacing={4}>
+                    {currentStep === 0 ? (
+                      <Button
+                        onClick={handleNext}
+                        w="100%"
+                        size="lg"
+                        colorScheme="purple"
+                      >
+                        Lanjut ke Pertanyaan
+                      </Button>
+                    ) : (
+                      <Button
+                        type="submit"
+                        w="100%"
+                        size="lg"
+                        colorScheme="purple"
+                        isLoading={loadingPertanyaan}
+                        isDisabled={pertanyaan.length === 0}
+                      >
+                        {pertanyaan.length === 0 ? 'Memuat Pertanyaan...' : 'Lihat Hasil Skrining'}
+                      </Button>
+                    )}
+                  </HStack>
                 </VStack>
               </form>
             </CardBody>
