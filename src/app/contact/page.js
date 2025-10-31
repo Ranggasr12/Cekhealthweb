@@ -17,12 +17,14 @@ import {
   useToast,
   Icon,
   SimpleGrid,
+  Alert,
+  AlertIcon,
+  Spinner,
 } from "@chakra-ui/react";
 import { useState, useEffect } from 'react';
 import emailjs from '@emailjs/browser';
 
-
-// SVG Icons (tetap sama)
+// SVG Icons
 const EmailIcon = (props) => (
   <svg
     stroke="currentColor"
@@ -83,6 +85,21 @@ const SendIcon = (props) => (
   </svg>
 );
 
+const WarningIcon = (props) => (
+  <svg
+    stroke="currentColor"
+    fill="currentColor"
+    strokeWidth="0"
+    viewBox="0 0 24 24"
+    height="1em"
+    width="1em"
+    {...props}
+  >
+    <path fill="none" d="M0 0h24v24H0z"></path>
+    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"></path>
+  </svg>
+);
+
 export default function ContactPage() {
   const toast = useToast();
   
@@ -96,6 +113,7 @@ export default function ContactPage() {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [emailjsReady, setEmailjsReady] = useState(false);
+  const [connectionError, setConnectionError] = useState(false);
 
   const EMAILJS_CONFIG = {
     serviceId: 'service_x3ynf7a',
@@ -104,13 +122,46 @@ export default function ContactPage() {
     publicKey: 'KUXa_oH2YEw3Qun4Y'
   };
 
-  // Initialize EmailJS
-  useEffect(() => {
-    if (EMAILJS_CONFIG.publicKey) {
-      emailjs.init(EMAILJS_CONFIG.publicKey);
-      setEmailjsReady(true);
-      console.log('✅ EmailJS initialized');
+  // Check internet connection
+  const checkInternetConnection = async () => {
+    try {
+      const response = await fetch('https://www.google.com', { 
+        method: 'HEAD',
+        mode: 'no-cors'
+      });
+      return true;
+    } catch (error) {
+      console.warn('⚠️ Internet connection issue detected');
+      return false;
     }
+  };
+
+  // Initialize EmailJS dengan error handling
+  useEffect(() => {
+    const initializeEmailJS = async () => {
+      try {
+        // Check internet connection first
+        const isConnected = await checkInternetConnection();
+        if (!isConnected) {
+          setConnectionError(true);
+          console.warn('📵 No internet connection');
+          return;
+        }
+
+        if (EMAILJS_CONFIG.publicKey) {
+          await emailjs.init(EMAILJS_CONFIG.publicKey);
+          setEmailjsReady(true);
+          setConnectionError(false);
+          console.log('✅ EmailJS initialized successfully');
+        }
+      } catch (error) {
+        console.error('❌ EmailJS initialization failed:', error);
+        setConnectionError(true);
+        setEmailjsReady(false);
+      }
+    };
+
+    initializeEmailJS();
   }, []);
 
   const handleChange = (e) => {
@@ -176,7 +227,22 @@ export default function ContactPage() {
       return;
     }
 
+    // Check connection before submitting
+    const isConnected = await checkInternetConnection();
+    if (!isConnected) {
+      setConnectionError(true);
+      toast({
+        title: "Koneksi Internet Bermasalah",
+        description: "Periksa koneksi internet Anda dan coba lagi",
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
+      return;
+    }
+
     setLoading(true);
+    setConnectionError(false);
 
     console.log('🔄 Memulai proses pengiriman form...');
 
@@ -203,7 +269,7 @@ export default function ContactPage() {
 
       console.log('✅ Email ke admin berhasil:', adminResult);
 
-    
+      // Auto-reply to user
       const autoReplyParams = {
         to_name: formData.name,
         to_email: formData.email,
@@ -216,7 +282,6 @@ export default function ContactPage() {
 
       console.log('📨 Auto-reply params:', autoReplyParams);
 
-     
       console.log('🚀 Mengirim auto-reply ke user...');
       try {
         const autoReplyResult = await emailjs.send(
@@ -227,7 +292,7 @@ export default function ContactPage() {
         console.log('✅ Auto-reply berhasil:', autoReplyResult);
       } catch (autoReplyError) {
         console.warn('⚠️ Auto-reply gagal, tapi tidak masalah:', autoReplyError);
-        
+        // Continue even if auto-reply fails
       }
 
       toast({
@@ -239,7 +304,7 @@ export default function ContactPage() {
         position: "top"
       });
 
-  
+      // Reset form
       setFormData({
         name: '',
         email: '',
@@ -258,7 +323,6 @@ export default function ContactPage() {
         
         if (error.text.includes('The recipients address is empty')) {
           errorMessage = "Pesan Anda sudah sampai ke admin! Kami akan menghubungi Anda segera.";
-          
           
           toast({
             title: "Pesan Terkirim! ✅",
@@ -280,6 +344,14 @@ export default function ContactPage() {
           setLoading(false);
           return;
         }
+      }
+
+      // Handle specific EmailJS errors
+      if (error?.status === 0) {
+        errorMessage = "Koneksi internet bermasalah. Periksa koneksi Anda dan coba lagi.";
+        setConnectionError(true);
+      } else if (error?.status === 400) {
+        errorMessage = "Template email tidak ditemukan. Silakan hubungi administrator.";
       }
 
       toast({
@@ -311,6 +383,30 @@ export default function ContactPage() {
               Tim kami akan merespons dalam 24 jam.
             </Text>
           </Box>
+
+          {/* Connection Warning */}
+          {connectionError && (
+            <Alert status="warning" borderRadius="lg" mb={4}>
+              <AlertIcon />
+              <Box>
+                <Text fontWeight="bold">Koneksi Internet Bermasalah</Text>
+                <Text fontSize="sm">
+                  Periksa koneksi internet Anda. Form mungkin tidak dapat mengirim pesan tanpa koneksi yang stabil.
+                </Text>
+              </Box>
+            </Alert>
+          )}
+
+          {/* EmailJS Status */}
+          {!emailjsReady && !connectionError && (
+            <Alert status="info" borderRadius="lg" mb={4}>
+              <AlertIcon />
+              <HStack spacing={2}>
+                <Spinner size="sm" />
+                <Text>Menyiapkan sistem pengiriman pesan...</Text>
+              </HStack>
+            </Alert>
+          )}
 
           <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={{ base: 8, lg: 12 }}>
             {/* Contact Information */}
@@ -353,7 +449,7 @@ export default function ContactPage() {
                         <Text color="gray.600" fontSize="md">
                           Program Studi Keperawatan<br />
                           Politeknik Kesehatan Tanjung Karang <br />
-                          	Jl. Soekarno-Hatta No. 1 dan No. 6, Kota Bandar Lampung, Lampung, Indonesia
+                          Jl. Soekarno-Hatta No. 1 dan No. 6, Kota Bandar Lampung, Lampung, Indonesia
                         </Text>
                         <Text color="gray.500" fontSize="sm">Lampung, Indonesia</Text>
                       </Box>
@@ -406,8 +502,27 @@ export default function ContactPage() {
                       size="lg"
                       w="100%"
                     >
-                     Chat via WhatsApp
+                      Chat via WhatsApp
                     </Button>
+                  </VStack>
+                </CardBody>
+              </Card>
+
+              {/* Alternative Contact Methods */}
+              <Card w="100%" borderRadius="xl" boxShadow="lg" bg="orange.50" border="1px" borderColor="orange.200">
+                <CardBody p={6}>
+                  <VStack spacing={3} align="start">
+                    <Heading size="md" color="orange.700">
+                      📞 Metode Lainnya
+                    </Heading>
+                    <Text color="orange.700" fontSize="sm">
+                      Jika form tidak bekerja, Anda dapat:
+                    </Text>
+                    <VStack spacing={2} align="start" w="100%">
+                      <Text fontSize="sm">• Email langsung: cekhealthv1@gmail.com</Text>
+                      <Text fontSize="sm">• Telepon: +62 21 1234 5678</Text>
+                      <Text fontSize="sm">• Kunjungi kampus langsung</Text>
+                    </VStack>
                   </VStack>
                 </CardBody>
               </Card>
@@ -423,6 +538,14 @@ export default function ContactPage() {
                   <Text color="gray.600">
                     Isi form berikut dan tim kami akan segera merespons pertanyaan Anda.
                   </Text>
+                  
+                  {/* Form Status */}
+                  {!emailjsReady && (
+                    <Alert status="info" size="sm" borderRadius="md">
+                      <AlertIcon />
+                      <Text fontSize="sm">Sistem pesan sedang dipersiapkan...</Text>
+                    </Alert>
+                  )}
                 </VStack>
 
                 <form onSubmit={handleSubmit}>
@@ -445,6 +568,7 @@ export default function ContactPage() {
                           boxShadow: errors.name ? "0 0 0 2px rgba(229, 62, 62, 0.2)" : "0 0 0 2px rgba(128, 90, 213, 0.2)",
                           bg: "white"
                         }}
+                        isDisabled={loading || connectionError}
                       />
                       {errors.name && (
                         <Text color="red.500" fontSize="sm" mt={1}>
@@ -472,6 +596,7 @@ export default function ContactPage() {
                           boxShadow: errors.email ? "0 0 0 2px rgba(229, 62, 62, 0.2)" : "0 0 0 2px rgba(128, 90, 213, 0.2)",
                           bg: "white"
                         }}
+                        isDisabled={loading || connectionError}
                       />
                       {errors.email && (
                         <Text color="red.500" fontSize="sm" mt={1}>
@@ -498,6 +623,7 @@ export default function ContactPage() {
                           boxShadow: errors.subject ? "0 0 0 2px rgba(229, 62, 62, 0.2)" : "0 0 0 2px rgba(128, 90, 213, 0.2)",
                           bg: "white"
                         }}
+                        isDisabled={loading || connectionError}
                       />
                       {errors.subject && (
                         <Text color="red.500" fontSize="sm" mt={1}>
@@ -526,6 +652,7 @@ export default function ContactPage() {
                           boxShadow: errors.message ? "0 0 0 2px rgba(229, 62, 62, 0.2)" : "0 0 0 2px rgba(128, 90, 213, 0.2)",
                           bg: "white"
                         }}
+                        isDisabled={loading || connectionError}
                       />
                       {errors.message && (
                         <Text color="red.500" fontSize="sm" mt={1}>
@@ -539,33 +666,52 @@ export default function ContactPage() {
                       w="100%"
                       size="lg"
                       height="56px"
-                      bgGradient="linear(to-r, purple.500, pink.500)"
+                      bgGradient={connectionError || !emailjsReady ? 
+                        "linear(to-r, gray.400, gray.500)" : 
+                        "linear(to-r, purple.500, pink.500)"}
                       color="white"
                       isLoading={loading}
                       loadingText="Mengirim Pesan..."
-                      leftIcon={<SendIcon />}
+                      leftIcon={connectionError ? <WarningIcon /> : <SendIcon />}
                       fontSize="lg"
                       fontWeight="bold"
                       borderRadius="lg"
-                      _hover={{
+                      _hover={!connectionError && emailjsReady ? {
                         bgGradient: "linear(to-r, purple.600, pink.600)",
                         transform: "translateY(-2px)",
                         boxShadow: "0 10px 25px -5px rgba(128, 90, 213, 0.4)"
-                      }}
-                      _active={{
+                      } : {}}
+                      _active={!connectionError && emailjsReady ? {
                         transform: "translateY(0)",
                         boxShadow: "0 5px 15px -3px rgba(128, 90, 213, 0.4)"
-                      }}
+                      } : {}}
                       transition="all 0.3s ease"
-                      isDisabled={loading}
+                      isDisabled={loading || connectionError || !emailjsReady}
                     >
-                      {loading ? "Mengirim..." : "Kirim Pesan Sekarang"}
+                      {connectionError ? "Koneksi Bermasalah" : 
+                       !emailjsReady ? "Menyiapkan..." : 
+                       loading ? "Mengirim..." : "Kirim Pesan Sekarang"}
                     </Button>
 
                     <Text fontSize="sm" color="gray.500" textAlign="center" mt={2}>
                       Dengan mengirim pesan, Anda menyetujui kebijakan privasi kami. 
                       Data Anda aman dan tidak akan dibagikan.
                     </Text>
+
+                    {/* Connection Troubleshooting */}
+                    {connectionError && (
+                      <Alert status="warning" size="sm" borderRadius="md">
+                        <AlertIcon />
+                        <Box>
+                          <Text fontSize="sm" fontWeight="bold">Tips:</Text>
+                          <Text fontSize="xs">
+                            • Periksa koneksi internet Anda<br/>
+                            • Refresh halaman ini<br/>
+                            • Gunakan WhatsApp untuk kontak langsung
+                          </Text>
+                        </Box>
+                      </Alert>
+                    )}
                   </VStack>
                 </form>
               </CardBody>

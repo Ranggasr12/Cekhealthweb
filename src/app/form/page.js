@@ -169,12 +169,20 @@ export default function FormPage() {
   // Fetch pertanyaan dari database
   const fetchPertanyaan = async () => {
     try {
+      setLoadingPertanyaan(true);
       const { data, error } = await supabase
         .from('pertanyaan')
         .select('*')
         .order('created_at', { ascending: true });
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching questions:', error);
+        // Fallback jika tabel belum ada
+        setPertanyaan([]);
+        return;
+      }
+      
+      console.log('Pertanyaan loaded:', data?.length || 0);
       setPertanyaan(data || []);
     } catch (error) {
       console.error('Error fetching questions:', error);
@@ -184,6 +192,7 @@ export default function FormPage() {
         status: 'error',
         duration: 5000,
       });
+      setPertanyaan([]);
     } finally {
       setLoadingPertanyaan(false);
     }
@@ -191,6 +200,8 @@ export default function FormPage() {
 
   // Fetch materi penyakit
   const fetchMateriPenyakit = async (penyakitNames) => {
+    if (penyakitNames.length === 0) return;
+    
     setLoadingMateri(true);
     try {
       const { data, error } = await supabase
@@ -199,19 +210,16 @@ export default function FormPage() {
         .in('nama_penyakit', penyakitNames)
         .eq('jenis_materi', 'video');
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching materials:', error);
+        return;
+      }
 
       const groupedMateri = {};
       penyakitNames.forEach(penyakit => {
         groupedMateri[penyakit] = {
-          videos: []
+          videos: data?.filter(m => m.nama_penyakit === penyakit) || []
         };
-      });
-
-      data?.forEach(materi => {
-        if (materi.jenis_materi === 'video' && groupedMateri[materi.nama_penyakit]) {
-          groupedMateri[materi.nama_penyakit].videos.push(materi);
-        }
       });
 
       setMateriPenyakit(groupedMateri);
@@ -313,7 +321,16 @@ export default function FormPage() {
     return true;
   };
 
-  // Submit form
+  // Fungsi untuk memastikan confidence level valid
+  const getValidConfidenceLevel = (confidence) => {
+    const level = confidence?.toLowerCase() || 'rendah';
+    
+    // Pastikan hanya nilai yang diizinkan oleh constraint database
+    const validLevels = ['rendah', 'sedang', 'tinggi'];
+    return validLevels.includes(level) ? level : 'rendah';
+  };
+
+  // Submit form - FIXED VERSION
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -331,22 +348,50 @@ export default function FormPage() {
       await fetchMateriPenyakit(detectedDiseaseNames);
     }
 
-    // Simpan hasil ke database
+    // Simpan hasil ke database - FIXED confidence_level
     try {
+      const confidenceLevel = getValidConfidenceLevel(results.detectedDiseases[0]?.confidence);
+
       const { error } = await supabase
         .from('hasil_diagnosa')
         .insert([{
           nama: formData.nama,
           usia: parseInt(formData.usia),
           jenis_kelamin: formData.jenisKelamin,
-          email: formData.email,
-          telepon: formData.telepon,
+          email: formData.email || null,
+          telepon: formData.telepon || null,
           jawaban: jawaban,
           hasil: results,
+          total_score: results.detectedDiseases.reduce((sum, disease) => sum + disease.score, 0),
+          penyakit_terdeteksi: results.detectedDiseases.map(d => d.name),
+          confidence_level: confidenceLevel, // ✅ FIXED
           created_at: new Date().toISOString()
         }]);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Database error:', error);
+        
+        // Fallback: coba insert tanpa confidence_level jika masih error
+        const { error: fallbackError } = await supabase
+          .from('hasil_diagnosa')
+          .insert([{
+            nama: formData.nama,
+            usia: parseInt(formData.usia),
+            jenis_kelamin: formData.jenisKelamin,
+            email: formData.email || null,
+            telepon: formData.telepon || null,
+            jawaban: jawaban,
+            hasil: results,
+            total_score: results.detectedDiseases.reduce((sum, disease) => sum + disease.score, 0),
+            penyakit_terdeteksi: results.detectedDiseases.map(d => d.name),
+            confidence_level: null, // ❌ Set null jika masih bermasalah
+            created_at: new Date().toISOString()
+          }]);
+
+        if (fallbackError) {
+          throw fallbackError;
+        }
+      }
       
       toast({
         title: 'Berhasil',
@@ -356,16 +401,17 @@ export default function FormPage() {
       });
     } catch (error) {
       console.error('Error saving results:', error);
+      // Tetap tampilkan hasil meskipun gagal save
       toast({
-        title: 'Error',
-        description: 'Gagal menyimpan hasil skrining',
-        status: 'error',
+        title: 'Info',
+        description: 'Hasil skrining ditampilkan, tetapi gagal menyimpan ke database',
+        status: 'info',
         duration: 5000,
       });
     }
   };
 
-  // Kalkulasi hasil
+  // Kalkulasi hasil - FIXED VERSION
   const calculateResults = () => {
     const scores = {};
     const penyakitMap = {};
@@ -432,20 +478,24 @@ export default function FormPage() {
       });
     });
 
-    // Determine diseases with high risk
+    // Determine diseases with high risk - IMPROVED LOGIC
     const detectedDiseases = [];
     Object.keys(scores).forEach(penyakit => {
       const score = scores[penyakit];
       const totalQuestions = penyakitMap[penyakit].length;
-      const percentage = (score / totalQuestions) * 100;
       
-      if (percentage >= 40) { // Threshold diturunkan untuk sensitivitas lebih tinggi
+      // Hitung persentase berdasarkan total pertanyaan untuk penyakit tersebut
+      const maxPossibleScore = totalQuestions * 3; // Asumsi score maks 3 per pertanyaan
+      const percentage = maxPossibleScore > 0 ? (score / maxPossibleScore) * 100 : 0;
+      
+      // Threshold untuk mendeteksi penyakit
+      if (percentage >= 30 || score >= 2) {
         // Filter saran untuk penyakit ini saja
         const saranPenyakit = semuaSaran.filter(s => s.penyakit === penyakit).map(s => s.saran);
         
         detectedDiseases.push({
           name: penyakit,
-          confidence: percentage >= 70 ? "Tinggi" : percentage >= 50 ? "Sedang" : "Rendah",
+          confidence: percentage >= 60 ? "Tinggi" : percentage >= 40 ? "Sedang" : "Rendah",
           score: score,
           total: totalQuestions,
           percentage: percentage,
@@ -1339,6 +1389,18 @@ www.cekhealth.com
                             <Skeleton key={item} height="100px" width="100%" borderRadius="md" />
                           ))}
                         </VStack>
+                      ) : pertanyaan.length === 0 ? (
+                        <Box textAlign="center" py={8}>
+                          <Text color="gray.500" mb={4}>
+                            Belum ada pertanyaan yang tersedia.
+                          </Text>
+                          <Button 
+                            colorScheme="blue" 
+                            onClick={fetchPertanyaan}
+                          >
+                            Coba Muat Ulang
+                          </Button>
+                        </Box>
                       ) : (
                         <VStack spacing={6}>
                           {pertanyaan.map((question, index) => renderQuestion(question, index))}

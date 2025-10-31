@@ -16,7 +16,7 @@ import {
   Link,
   useToast,
 } from '@chakra-ui/react';
-import { supabase } from '@/lib/supabase';
+import { authSignIn } from '@/lib/supabase'; // ✅ GANTI IMPORT INI
 import { useRouter } from 'next/navigation';
 
 export default function Login() {
@@ -33,10 +33,8 @@ export default function Login() {
     try {
       console.log("🔐 Login attempt...", { email });
 
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password: password.trim(),
-      });
+      // ✅ GUNAKAN authSignIn, BUKAN supabase.auth.signInWithPassword
+      const { data, error } = await authSignIn(email.trim(), password.trim());
 
       if (error) {
         console.error("❌ Login error:", error);
@@ -104,6 +102,13 @@ export default function Login() {
         </Box>
 
         <Box w="100%" maxW="400px">
+          <Alert status="info" mb={4}>
+            <AlertIcon />
+            <Text fontSize="sm">
+              <strong>Demo Login:</strong> Gunakan email: <strong>admin@cekhealth.com</strong> dan password: <strong>admin123</strong>
+            </Text>
+          </Alert>
+
           <form onSubmit={handleLogin}>
             <VStack spacing={4}>
               <FormControl isRequired>

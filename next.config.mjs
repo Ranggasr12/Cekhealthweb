@@ -3,7 +3,7 @@ const nextConfig = {
     appDir: true,
   },
   images: {
-    domains: ['https://xibxjzmuuqiqawhroogj.supabase.co'],
+    domains: ['https://gcnblwhhxtvvetpzgleq.supabase.co'],
   },
   // Optional: Untuk performance
   compiler: {

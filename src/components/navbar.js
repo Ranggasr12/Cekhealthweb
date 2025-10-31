@@ -64,7 +64,7 @@ export default function Navbar() {
       const { data: profile } = await supabase
         .from("profiles")
         .select("role")
-        .eq("id", user.id)
+        .eq("user_id", user.id)  // ✅ FIXED: gunakan user_id
         .single();
 
       const userRole = profile?.role || 'user';
@@ -146,10 +146,11 @@ export default function Navbar() {
 
         // Try to get user profile from database
         try {
+          // ✅ PERBAIKAN: Gunakan user_id bukan id
           const { data: profile, error: profileError } = await supabase
             .from("profiles")
-            .select("role")
-            .eq("id", session.user.id)
+            .select("role, full_name")
+            .eq("user_id", session.user.id)  // ✅ FIXED
             .single();
 
           console.log("📊 Profile query result:", { 
@@ -165,13 +166,17 @@ export default function Navbar() {
           } else {
             // Jika profile tidak ditemukan, buat otomatis
             console.log("🔄 Profile not found, creating automatically...");
+            
+            // ✅ PERBAIKAN: Gunakan user_id bukan id
             const { error: insertError } = await supabase
               .from('profiles')
               .insert({
-                id: session.user.id,
+                user_id: session.user.id,  // ✅ FIXED
                 email: session.user.email,
                 role: 'user',
-                full_name: session.user.email.split('@')[0]
+                full_name: session.user.email.split('@')[0],
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
               });
 
             if (!insertError) {
@@ -179,6 +184,7 @@ export default function Navbar() {
               setRole('user');
             } else {
               console.error("❌ Failed to create profile:", insertError);
+              // Fallback ke user role jika gagal create
               setRole('user');
             }
           }
@@ -186,6 +192,7 @@ export default function Navbar() {
           // 🚨 AUTO-ADMIN untuk email tertentu
           const adminEmails = [
             'admin@cekhealth.com', 
+            'admin@example.com'
           ];
           
           if (adminEmails.includes(session.user.email.toLowerCase())) {
@@ -196,15 +203,18 @@ export default function Navbar() {
             const { error: updateError } = await supabase
               .from('profiles')
               .update({ role: 'admin' })
-              .eq('id', session.user.id);
+              .eq('user_id', session.user.id);  // ✅ FIXED
               
             if (!updateError) {
               console.log("✅ Database updated to admin role");
+            } else {
+              console.error("❌ Failed to update admin role:", updateError);
             }
           }
           
         } catch (profileError) {
           console.error("❌ Profile error:", profileError);
+          // Fallback ke user role jika ada error
           setRole("user");
         }
       } else {
@@ -215,6 +225,8 @@ export default function Navbar() {
     } catch (error) {
       console.error("❌ Error loading user:", error);
       setIsMockMode(true);
+      // Fallback ke guest role jika ada error besar
+      setRole('guest');
     } finally {
       setLoading(false);
     }

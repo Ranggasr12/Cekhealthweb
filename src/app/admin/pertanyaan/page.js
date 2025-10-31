@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Grid,
@@ -46,7 +46,6 @@ import {
   Spinner,
   InputGroup,
   InputLeftElement,
-  Tooltip,
   Tabs,
   TabList,
   TabPanels,
@@ -55,7 +54,7 @@ import {
 } from '@chakra-ui/react';
 import { supabase } from '@/lib/supabase';
 import AdminLayout from '@/components/AdminLayout';
-import { FiTrash2, FiHelpCircle, FiPlus, FiX, FiSettings, FiEdit3, FiSearch, FiAlertTriangle } from 'react-icons/fi';
+import { FiTrash2, FiHelpCircle, FiPlus, FiX, FiEdit3, FiSearch } from 'react-icons/fi';
 
 export default function PertanyaanManagement() {
   const [pertanyaan, setPertanyaan] = useState([]);
@@ -79,17 +78,20 @@ export default function PertanyaanManagement() {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [loadingPenyakit, setLoadingPenyakit] = useState(false);
-  const [updatingPenyakit, setUpdatingPenyakit] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterPenyakit, setFilterPenyakit] = useState('');
   const [filterTipe, setFilterTipe] = useState('');
+  const [dbInitialized, setDbInitialized] = useState(false);
+  const [tablesStatus, setTablesStatus] = useState({
+    pertanyaan: false,
+    penyakit_config: false
+  });
+  const [initialized, setInitialized] = useState(false);
   
   // Modals
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const { isOpen: isSettingsOpen, onOpen: onSettingsOpen, onClose: onSettingsClose } = useDisclosure();
   const { isOpen: isEditOpen, onOpen: onEditOpen, onClose: onEditClose } = useDisclosure();
   
-  const [selectedPenyakit, setSelectedPenyakit] = useState(null);
   const [editingPertanyaan, setEditingPertanyaan] = useState(null);
   const toast = useToast();
 
@@ -104,7 +106,7 @@ export default function PertanyaanManagement() {
     { value: 'essay', label: 'Essay' }
   ];
 
-  // Helper function untuk data default
+  // Helper function untuk data default penyakit
   const getDefaultPenyakit = () => [
     { id: '1', nama_penyakit: 'Diabetes', min_nilai: 1, max_nilai: 11 },
     { id: '2', nama_penyakit: 'Hipertensi', min_nilai: 1, max_nilai: 15 },
@@ -114,39 +116,103 @@ export default function PertanyaanManagement() {
     { id: '6', nama_penyakit: 'Gastrointestinal', min_nilai: 0, max_nilai: 15 }
   ];
 
-  // Fetch data pertanyaan - DIPERBAIKI
-  const fetchPertanyaan = useCallback(async () => {
+  // Helper function untuk data default pertanyaan
+  const getDefaultPertanyaan = () => [
+    {
+      id: '1',
+      jenis_penyakit: 'Diabetes',
+      pertanyaan_text: 'Apakah Anda sering merasa haus dan buang air kecil?',
+      tipe_pertanyaan: 'ya_tidak',
+      keyword_jawaban: '',
+      saran: 'Perbanyak minum air putih dan konsultasi dengan dokter',
+      indikasi: 'Gejala diabetes tipe 2',
+      tingkat_keparahan: 'sedang',
+      score: 2,
+      is_positive_indicator: true
+    }
+  ];
+
+  // Fungsi untuk mengecek status tabel di database
+  const checkTablesExistence = async () => {
+    try {
+      console.log('🔄 Checking database tables...');
+      
+      // Cek tabel pertanyaan
+      const { error: pertanyaanError } = await supabase
+        .from('pertanyaan')
+        .select('id')
+        .limit(1);
+
+      // Cek tabel penyakit_config
+      const { error: penyakitError } = await supabase
+        .from('penyakit_config')
+        .select('id')
+        .limit(1);
+
+      const pertanyaanExists = !pertanyaanError;
+      const penyakitConfigExists = !penyakitError;
+
+      setTablesStatus({
+        pertanyaan: pertanyaanExists,
+        penyakit_config: penyakitConfigExists
+      });
+
+      console.log('📊 Tables status:', { pertanyaanExists, penyakitConfigExists });
+
+      return { pertanyaanExists, penyakitConfigExists };
+    } catch (error) {
+      console.error('❌ Error checking tables:', error);
+      return { pertanyaanExists: false, penyakitConfigExists: false };
+    }
+  };
+
+  // Fetch data pertanyaan dengan error handling yang lebih baik
+  const fetchPertanyaan = async () => {
     setLoading(true);
     try {
       console.log('🔄 Fetching pertanyaan dari database...');
+      
       const { data, error } = await supabase
         .from('pertanyaan')
         .select('*')
         .order('created_at', { ascending: false });
       
       if (error) {
-        console.error('❌ Error fetch pertanyaan:', error);
+        console.warn('⚠️ Error fetch pertanyaan:', error);
+        
+        // Jika tabel tidak ada, gunakan data statis
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          console.log('ℹ️ Tabel pertanyaan belum tersedia, menggunakan data statis');
+          setPertanyaan(getDefaultPertanyaan());
+          setTablesStatus(prev => ({ ...prev, pertanyaan: false }));
+          return;
+        }
+        
         throw error;
       }
       
       console.log('✅ Pertanyaan berhasil difetch:', data?.length || 0, 'data');
       setPertanyaan(data || []);
+      setTablesStatus(prev => ({ ...prev, pertanyaan: true }));
+      
     } catch (error) {
       console.error('❌ Error fetching pertanyaan:', error);
+      // Fallback ke data statis
+      setPertanyaan(getDefaultPertanyaan());
       toast({
-        title: 'Error',
-        description: 'Gagal memuat data pertanyaan: ' + (error.message || 'Unknown error'),
-        status: 'error',
-        duration: 5000,
+        title: 'Menggunakan Data Sementara',
+        description: 'Tabel pertanyaan belum tersedia, menggunakan data statis',
+        status: 'warning',
+        duration: 4000,
         isClosable: true,
       });
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  };
 
-  // Fetch data penyakit - VERSION IMPROVED DENGAN ERROR HANDLING
-  const fetchJenisPenyakit = useCallback(async () => {
+  // Fetch data penyakit dengan error handling yang lebih baik
+  const fetchJenisPenyakit = async () => {
     setLoadingPenyakit(true);
     try {
       console.log('🔄 Fetching jenis penyakit dari database...');
@@ -157,23 +223,15 @@ export default function PertanyaanManagement() {
         .order('nama_penyakit', { ascending: true });
       
       if (error) {
-        console.error('❌ Error fetch penyakit:', error);
+        console.warn('⚠️ Error fetch penyakit:', error);
         
-        // Cek jenis error
-        if (error.code === 'PGRST205' || error.message?.includes('schema cache') || error.code === '42P01') {
+        // Jika tabel tidak ada, gunakan data statis
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
           console.log('ℹ️ Tabel penyakit_config belum tersedia, menggunakan data statis');
-          
-          // Tampilkan alert info untuk admin
-          toast({
-            title: 'Database Setup Required',
-            description: 'Tabel penyakit_config perlu dibuat di Supabase. Gunakan data statis sementara.',
-            status: 'warning',
-            duration: 8000,
-            isClosable: true,
-          });
-          
-          // Gunakan data statis
-          setJenisPenyakit(getDefaultPenyakit());
+          const defaultPenyakit = getDefaultPenyakit();
+          setJenisPenyakit(defaultPenyakit);
+          setDbInitialized(false);
+          setTablesStatus(prev => ({ ...prev, penyakit_config: false }));
           return;
         }
         
@@ -182,96 +240,71 @@ export default function PertanyaanManagement() {
       
       console.log('✅ Jenis penyakit berhasil difetch:', data?.length || 0, 'data');
       
-      // Jika berhasil dan ada data
       if (data && data.length > 0) {
         setJenisPenyakit(data);
+        setDbInitialized(true);
+        setTablesStatus(prev => ({ ...prev, penyakit_config: true }));
       } else {
-        // Jika tabel ada tapi kosong, gunakan data statis
         console.log('ℹ️ Tabel penyakit_config kosong, menggunakan data statis');
-        setJenisPenyakit(getDefaultPenyakit());
-        
-        toast({
-          title: 'Info',
-          description: 'Tabel penyakit_config kosong. Gunakan data statis sementara.',
-          status: 'info',
-          duration: 5000,
-          isClosable: true,
-        });
+        const defaultPenyakit = getDefaultPenyakit();
+        setJenisPenyakit(defaultPenyakit);
+        setDbInitialized(false);
       }
     } catch (error) {
       console.error('❌ Error fetching jenis penyakit:', error);
-      
       // Fallback ke data statis
-      setJenisPenyakit(getDefaultPenyakit());
-      
-      toast({
-        title: 'Error',
-        description: 'Gagal memuat data penyakit. Menggunakan data statis. Error: ' + (error.message || 'Unknown error'),
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
+      const defaultPenyakit = getDefaultPenyakit();
+      setJenisPenyakit(defaultPenyakit);
+      setDbInitialized(false);
     } finally {
       setLoadingPenyakit(false);
     }
-  }, [toast]);
-
-  // Fungsi untuk membuat tabel penyakit_config otomatis
-  const createPenyakitConfigTable = async () => {
-    try {
-      console.log('🔄 Mencoba membuat tabel penyakit_config...');
-      
-      // Coba insert data default
-      const { error } = await supabase
-        .from('penyakit_config')
-        .insert([
-          { nama_penyakit: 'Diabetes', min_nilai: 1, max_nilai: 11 },
-          { nama_penyakit: 'Hipertensi', min_nilai: 1, max_nilai: 15 },
-          { nama_penyakit: 'Jantung', min_nilai: 0, max_nilai: 25 },
-          { nama_penyakit: 'Kolesterol', min_nilai: 0, max_nilai: 18 }
-        ]);
-      
-      if (error) {
-        if (error.code === '23505') { // Unique constraint violation
-          console.log('✅ Data penyakit sudah ada');
-        } else {
-          console.error('❌ Error creating table:', error);
-          throw error;
-        }
-      } else {
-        console.log('✅ Tabel penyakit_config berhasil dibuat dengan data default');
-      }
-    } catch (error) {
-      console.error('❌ Error creating penyakit_config table:', error);
-      throw error;
-    }
   };
 
-  // Initialize data saat component mount
+  // Initialize data saat component mount - DIUBAH: Fix logic
   useEffect(() => {
     console.log('🎯 Initializing Pertanyaan Management...');
-    fetchPertanyaan();
-    fetchJenisPenyakit();
-  }, [fetchPertanyaan, fetchJenisPenyakit]);
+    
+    if (initialized) return;
 
-  // Auto-create table jika diperlukan
-  useEffect(() => {
-    const initializeDatabase = async () => {
-      // Cek jika tidak ada data penyakit
-      if (jenisPenyakit.length === 0 && !loadingPenyakit) {
-        try {
-          await createPenyakitConfigTable();
-          // Refresh data setelah create
-          setTimeout(() => fetchJenisPenyakit(), 1000);
-        } catch (error) {
-          console.log('Tidak dapat membuat tabel, menggunakan data statis');
+    const initializeData = async () => {
+      try {
+        // Cek status tabel terlebih dahulu
+        const tablesStatus = await checkTablesExistence();
+        
+        console.log('📊 Initial tables status:', tablesStatus);
+
+        // PERBAIKAN: Gunakan data dari database jika tabel ada
+        if (tablesStatus.pertanyaan) {
+          console.log('✅ Tabel pertanyaan ada, fetching dari database');
+          await fetchPertanyaan();
+        } else {
+          console.log('❌ Tabel pertanyaan tidak ada, menggunakan data statis');
+          setPertanyaan(getDefaultPertanyaan());
         }
+
+        if (tablesStatus.penyakit_config) {
+          console.log('✅ Tabel penyakit_config ada, fetching dari database');
+          await fetchJenisPenyakit();
+        } else {
+          console.log('❌ Tabel penyakit_config tidak ada, menggunakan data statis');
+          setJenisPenyakit(getDefaultPenyakit());
+        }
+
+        setInitialized(true);
+
+      } catch (error) {
+        console.error('❌ Error in initializeData:', error);
+        // Fallback ke data statis
+        setPertanyaan(getDefaultPertanyaan());
+        setJenisPenyakit(getDefaultPenyakit());
       }
     };
 
-    initializeDatabase();
-  }, [jenisPenyakit.length, loadingPenyakit, fetchJenisPenyakit]);
+    initializeData();
+  }, [initialized]); // Hanya jalankan sekali
 
+  // Auto-update score ketika tingkat keparahan berubah
   useEffect(() => {
     const tingkat = tingkatKeparahanOptions.find(t => t.value === formData.tingkat_keparahan);
     if (tingkat) {
@@ -290,7 +323,7 @@ export default function PertanyaanManagement() {
     return matchesSearch && matchesPenyakit && matchesTipe;
   });
 
-  // Tambah penyakit baru - DIPERBAIKI
+  // Tambah penyakit baru - DIUBAH: Perbaiki logic
   const handleAddPenyakit = async () => {
     if (!newPenyakit.trim()) {
       toast({
@@ -348,43 +381,64 @@ export default function PertanyaanManagement() {
     try {
       console.log('🔄 Menambahkan penyakit baru:', newPenyakit);
       
-      const { data, error } = await supabase
-        .from('penyakit_config')
-        .insert([{ 
-          nama_penyakit: newPenyakit.trim(),
-          min_nilai: min,
-          max_nilai: max
-        }])
-        .select();
+      const newPenyakitData = {
+        nama_penyakit: newPenyakit.trim(),
+        min_nilai: min,
+        max_nilai: max
+      };
 
-      if (error) {
-        if (error.code === '23505') {
-          throw new Error('Jenis penyakit sudah ada');
+      // Jika tabel ada, simpan ke database
+      if (tablesStatus.penyakit_config) {
+        const { data, error } = await supabase
+          .from('penyakit_config')
+          .insert([newPenyakitData])
+          .select();
+
+        if (error) {
+          if (error.code === '23505') {
+            throw new Error('Jenis penyakit sudah ada');
+          }
+          throw error;
         }
-        if (error.code === '42P01') {
-          throw new Error('Tabel penyakit_config belum dibuat. Silakan buat tabel terlebih dahulu di Supabase.');
-        }
-        throw error;
+
+        toast({
+          title: 'Berhasil',
+          description: `Penyakit "${newPenyakit}" berhasil ditambahkan`,
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
+
+        // Refresh dari database
+        await fetchJenisPenyakit();
+      } else {
+        // Jika tabel belum ada, tambahkan ke state saja
+        const newId = (jenisPenyakit.length + 1).toString();
+        const newPenyakitItem = {
+          id: newId,
+          ...newPenyakitData
+        };
+        
+        setJenisPenyakit(prev => [...prev, newPenyakitItem]);
+        
+        toast({
+          title: 'Berhasil (Data Sementara)',
+          description: `Penyakit "${newPenyakit}" berhasil ditambahkan (data sementara)`,
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
       }
-
-      toast({
-        title: 'Berhasil',
-        description: `Penyakit "${newPenyakit}" berhasil ditambahkan`,
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
 
       setNewPenyakit('');
       setPenyakitForm({ min_nilai: 0, max_nilai: 100 });
       onClose();
-      fetchJenisPenyakit();
       
     } catch (error) {
       console.error('❌ Error adding penyakit:', error);
       toast({
         title: 'Error',
-        description: error.message || 'Gagal menambahkan penyakit. Pastikan tabel sudah dibuat di Supabase.',
+        description: error.message || 'Gagal menambahkan penyakit',
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -392,7 +446,7 @@ export default function PertanyaanManagement() {
     }
   };
 
-  // Tambah pertanyaan - DIPERBAIKI
+  // Tambah pertanyaan - DIUBAH: Perbaiki logic dan error handling
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
@@ -413,41 +467,65 @@ export default function PertanyaanManagement() {
 
       const finalScore = formData.is_positive_indicator ? formData.score : -formData.score;
 
-      console.log('🔄 Menambahkan pertanyaan baru:', {
+      console.log('🔄 Menambahkan pertanyaan baru...');
+
+      const newPertanyaanData = {
         jenis_penyakit: formData.jenis_penyakit,
-        tipe_pertanyaan: formData.tipe_pertanyaan
-      });
+        pertanyaan_text: formData.pertanyaan_text.trim(),
+        tipe_pertanyaan: formData.tipe_pertanyaan,
+        keyword_jawaban: formData.tipe_pertanyaan === 'essay' ? formData.keyword_jawaban.trim() : null,
+        saran: formData.saran.trim(),
+        indikasi: formData.indikasi.trim(),
+        tingkat_keparahan: formData.tingkat_keparahan,
+        score: finalScore,
+        is_positive_indicator: formData.is_positive_indicator
+      };
 
-      const { error } = await supabase
-        .from('pertanyaan')
-        .insert([{
-          jenis_penyakit: formData.jenis_penyakit,
-          pertanyaan_text: formData.pertanyaan_text.trim(),
-          tipe_pertanyaan: formData.tipe_pertanyaan,
-          keyword_jawaban: formData.tipe_pertanyaan === 'essay' ? formData.keyword_jawaban.trim() : null,
-          saran: formData.saran.trim(),
-          indikasi: formData.indikasi.trim(),
-          tingkat_keparahan: formData.tingkat_keparahan,
-          score: finalScore,
-          is_positive_indicator: formData.is_positive_indicator
-        }]);
+      console.log('📦 Data yang akan disimpan:', newPertanyaanData);
 
-      if (error) {
-        console.error('❌ Error insert pertanyaan:', error);
-        
-        if (error.code === '42P01') {
-          throw new Error('Tabel pertanyaan belum dibuat. Silakan jalankan SQL schema terlebih dahulu.');
+      // Jika tabel ada, simpan ke database
+      if (tablesStatus.pertanyaan) {
+        const { data, error } = await supabase
+          .from('pertanyaan')
+          .insert([newPertanyaanData])
+          .select();
+
+        if (error) {
+          console.error('❌ Database error:', error);
+          throw new Error(`Gagal menyimpan ke database: ${error.message}`);
         }
-        throw error;
+
+        console.log('✅ Data berhasil disimpan:', data);
+
+        toast({
+          title: 'Pertanyaan berhasil ditambahkan!',
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
+
+        // Refresh dari database
+        await fetchPertanyaan();
+      } else {
+        // Jika tabel belum ada, tambahkan ke state saja
+        const newId = (pertanyaan.length + 1).toString();
+        const newPertanyaanItem = {
+          id: newId,
+          ...newPertanyaanData,
+          created_at: new Date().toISOString()
+        };
+
+        setPertanyaan(prev => [newPertanyaanItem, ...prev]);
+
+        toast({
+          title: 'Pertanyaan berhasil ditambahkan! (Data Sementara)',
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
       }
 
-      toast({
-        title: 'Pertanyaan berhasil ditambahkan!',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
-
+      // Reset form
       setFormData({
         jenis_penyakit: '',
         pertanyaan_text: '',
@@ -459,7 +537,7 @@ export default function PertanyaanManagement() {
         score: 1,
         is_positive_indicator: true
       });
-      fetchPertanyaan();
+
     } catch (error) {
       console.error('❌ Error adding pertanyaan:', error);
       toast({
@@ -491,7 +569,7 @@ export default function PertanyaanManagement() {
     onEditOpen();
   };
 
-  // Update pertanyaan
+  // Update pertanyaan - DIUBAH: Perbaiki logic
   const handleUpdatePertanyaan = async (e) => {
     e.preventDefault();
     setSubmitting(true);
@@ -499,30 +577,61 @@ export default function PertanyaanManagement() {
     try {
       const finalScore = formData.is_positive_indicator ? formData.score : -formData.score;
 
-      const { error } = await supabase
-        .from('pertanyaan')
-        .update({
-          jenis_penyakit: formData.jenis_penyakit,
-          pertanyaan_text: formData.pertanyaan_text.trim(),
-          tipe_pertanyaan: formData.tipe_pertanyaan,
-          keyword_jawaban: formData.tipe_pertanyaan === 'essay' ? formData.keyword_jawaban.trim() : null,
-          saran: formData.saran.trim(),
-          indikasi: formData.indikasi.trim(),
-          tingkat_keparahan: formData.tingkat_keparahan,
-          score: finalScore,
-          is_positive_indicator: formData.is_positive_indicator,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', editingPertanyaan.id);
+      const updatedData = {
+        jenis_penyakit: formData.jenis_penyakit,
+        pertanyaan_text: formData.pertanyaan_text.trim(),
+        tipe_pertanyaan: formData.tipe_pertanyaan,
+        keyword_jawaban: formData.tipe_pertanyaan === 'essay' ? formData.keyword_jawaban.trim() : null,
+        saran: formData.saran.trim(),
+        indikasi: formData.indikasi.trim(),
+        tingkat_keparahan: formData.tingkat_keparahan,
+        score: finalScore,
+        is_positive_indicator: formData.is_positive_indicator,
+        updated_at: new Date().toISOString()
+      };
 
-      if (error) throw error;
+      console.log('🔄 Updating pertanyaan:', editingPertanyaan.id, updatedData);
 
-      toast({
-        title: 'Pertanyaan berhasil diupdate!',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
+      // Jika tabel ada, update di database
+      if (tablesStatus.pertanyaan) {
+        const { error } = await supabase
+          .from('pertanyaan')
+          .update(updatedData)
+          .eq('id', editingPertanyaan.id);
+
+        if (error) {
+          console.error('❌ Update error:', error);
+          throw new Error(`Gagal update: ${error.message}`);
+        }
+
+        toast({
+          title: 'Pertanyaan berhasil diupdate!',
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
+
+        await fetchPertanyaan();
+      } else {
+        // Jika tabel belum ada, update di state saja
+        setPertanyaan(prev => 
+          prev.map(item => 
+            item.id === editingPertanyaan.id 
+              ? { 
+                  ...item, 
+                  ...updatedData
+                } 
+              : item
+          )
+        );
+
+        toast({
+          title: 'Pertanyaan berhasil diupdate! (Data Sementara)',
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
+      }
 
       onEditClose();
       setEditingPertanyaan(null);
@@ -537,7 +646,7 @@ export default function PertanyaanManagement() {
         score: 1,
         is_positive_indicator: true
       });
-      fetchPertanyaan();
+
     } catch (error) {
       console.error('Error updating pertanyaan:', error);
       toast({
@@ -552,30 +661,57 @@ export default function PertanyaanManagement() {
     }
   };
 
-  // Hapus pertanyaan
+  // Hapus pertanyaan - DIUBAH: Perbaiki ID handling
   const handleDelete = async (id) => {
     if (!confirm('Apakah Anda yakin ingin menghapus pertanyaan ini?')) return;
 
     try {
-      const { error } = await supabase
-        .from('pertanyaan')
-        .delete()
-        .eq('id', id);
+      console.log('🔄 Deleting pertanyaan dengan ID:', id);
 
-      if (error) throw error;
+      // Jika tabel ada, hapus dari database
+      if (tablesStatus.pertanyaan) {
+        // Pastikan ID adalah number (database ID) bukan string ID dari data statis
+        const numericId = typeof id === 'string' && id.startsWith('temp-') ? null : parseInt(id);
+        
+        if (!numericId || isNaN(numericId)) {
+          throw new Error('ID tidak valid untuk operasi database');
+        }
 
-      toast({
-        title: 'Pertanyaan berhasil dihapus!',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
+        const { error } = await supabase
+          .from('pertanyaan')
+          .delete()
+          .eq('id', numericId);
 
-      fetchPertanyaan();
+        if (error) {
+          console.error('❌ Delete error:', error);
+          throw new Error(`Gagal menghapus: ${error.message}`);
+        }
+
+        toast({
+          title: 'Pertanyaan berhasil dihapus!',
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
+
+        await fetchPertanyaan();
+      } else {
+        // Jika tabel belum ada, hapus dari state saja
+        setPertanyaan(prev => prev.filter(item => item.id !== id));
+        
+        toast({
+          title: 'Pertanyaan berhasil dihapus! (Data Sementara)',
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
+      }
+
     } catch (error) {
+      console.error('❌ Error deleting pertanyaan:', error);
       toast({
         title: 'Error',
-        description: error.message,
+        description: error.message || 'Gagal menghapus pertanyaan',
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -601,23 +737,37 @@ export default function PertanyaanManagement() {
     if (!confirm(`Apakah Anda yakin ingin menghapus penyakit "${namaPenyakit}"?`)) return;
 
     try {
-      const { error } = await supabase
-        .from('penyakit_config')
-        .delete()
-        .eq('id', id);
+      // Jika tabel ada, hapus dari database
+      if (tablesStatus.penyakit_config) {
+        const { error } = await supabase
+          .from('penyakit_config')
+          .delete()
+          .eq('id', id);
 
-      if (error) throw error;
+        if (error) throw error;
 
-      toast({
-        title: 'Berhasil',
-        description: `Penyakit "${namaPenyakit}" berhasil dihapus`,
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
+        toast({
+          title: 'Berhasil',
+          description: `Penyakit "${namaPenyakit}" berhasil dihapus`,
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
 
-      fetchJenisPenyakit();
-      
+        await fetchJenisPenyakit();
+      } else {
+        // Jika tabel belum ada, hapus dari state saja
+        setJenisPenyakit(prev => prev.filter(item => item.id !== id));
+        
+        toast({
+          title: 'Berhasil (Data Sementara)',
+          description: `Penyakit "${namaPenyakit}" berhasil dihapus (data sementara)`,
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
+      }
+
       // Reset form jika penyakit yang dihapus sedang dipilih
       if (formData.jenis_penyakit === namaPenyakit) {
         setFormData(prev => ({ ...prev, jenis_penyakit: '' }));
@@ -668,16 +818,29 @@ export default function PertanyaanManagement() {
   const stats = calculateStats();
 
   // Fungsi untuk refresh data
-  const handleRefreshData = () => {
-    fetchPertanyaan();
-    fetchJenisPenyakit();
-    toast({
-      title: 'Data Diperbarui',
-      description: 'Data pertanyaan dan penyakit telah diperbarui',
-      status: 'info',
-      duration: 3000,
-    });
+  const handleRefreshData = async () => {
+    setLoading(true);
+    try {
+      await Promise.all([
+        checkTablesExistence(),
+        fetchPertanyaan(),
+        fetchJenisPenyakit()
+      ]);
+      
+      toast({
+        title: 'Data Diperbarui',
+        description: 'Data pertanyaan dan penyakit telah diperbarui',
+        status: 'info',
+        duration: 3000,
+      });
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  // ... (rest of the JSX remains the same, just use the fixed functions above)
 
   return (
     <AdminLayout>
@@ -694,26 +857,29 @@ export default function PertanyaanManagement() {
               colorScheme="blue"
               variant="outline"
               size="sm"
+              isLoading={loading}
             >
               Refresh Data
             </Button>
           </HStack>
 
           {/* Database Status Alert */}
-          {jenisPenyakit.length === 0 && !loadingPenyakit && (
-            <Alert status="warning" borderRadius="md">
+          {(!tablesStatus.pertanyaan || !tablesStatus.penyakit_config) && (
+            <Alert status="info" borderRadius="md">
               <AlertIcon />
-              <VStack align="start" spacing={1}>
-                <Text fontSize="sm" fontWeight="bold">⚠️ Database Setup Required</Text>
-                <Text fontSize="sm">Tabel penyakit_config belum tersedia. Sistem menggunakan data statis sementara.</Text>
-                <Button 
-                  size="sm" 
-                  colorScheme="blue" 
-                  mt={2}
-                  onClick={() => window.open('https://supabase.com/dashboard/project/' + process.env.NEXT_PUBLIC_SUPABASE_PROJECT_ID + '/sql', '_blank')}
-                >
-                  Buat Tabel di Supabase
-                </Button>
+              <VStack align="start" spacing={2} width="full">
+                <Text fontSize="sm" fontWeight="bold">ℹ️ Status Database</Text>
+                <Text fontSize="sm">
+                  {!tablesStatus.pertanyaan && !tablesStatus.penyakit_config 
+                    ? 'Menggunakan data statis sementara. Tabel database belum tersedia.'
+                    : !tablesStatus.pertanyaan 
+                    ? 'Menggunakan data statis untuk pertanyaan. Tabel pertanyaan belum tersedia.'
+                    : 'Menggunakan data statis untuk penyakit. Tabel penyakit_config belum tersedia.'
+                  }
+                </Text>
+                <Text fontSize="xs" color="gray.600">
+                  Semua perubahan akan tersimpan sementara di browser.
+                </Text>
               </VStack>
             </Alert>
           )}
@@ -724,6 +890,9 @@ export default function PertanyaanManagement() {
               <CardBody textAlign="center">
                 <Text fontSize="2xl" fontWeight="bold" color="blue.600">{stats.total}</Text>
                 <Text color="gray.600">Total Pertanyaan</Text>
+                {!tablesStatus.pertanyaan && (
+                  <Badge colorScheme="yellow" fontSize="xs" mt={1}>Data Sementara</Badge>
+                )}
               </CardBody>
             </Card>
             <Card>
@@ -742,10 +911,14 @@ export default function PertanyaanManagement() {
               <CardBody textAlign="center">
                 <Text fontSize="2xl" fontWeight="bold" color="orange.600">{jenisPenyakit.length}</Text>
                 <Text color="gray.600">Jenis Penyakit</Text>
+                {!tablesStatus.penyakit_config && (
+                  <Badge colorScheme="yellow" fontSize="xs" mt={1}>Data Sementara</Badge>
+                )}
               </CardBody>
             </Card>
           </SimpleGrid>
 
+          {/* Tabs untuk Pertanyaan dan Penyakit */}
           <Tabs variant="enclosed">
             <TabList>
               <Tab>Kelola Pertanyaan</Tab>
@@ -896,6 +1069,7 @@ export default function PertanyaanManagement() {
                               leftIcon={<FiHelpCircle />}
                             >
                               {editingPertanyaan ? 'Update Pertanyaan' : 'Tambah Pertanyaan'}
+                              {!tablesStatus.pertanyaan && ' (Sementara)'}
                             </Button>
 
                             {editingPertanyaan && (
@@ -933,6 +1107,11 @@ export default function PertanyaanManagement() {
                       <CardBody>
                         <Heading size="md" mb={4}>
                           Daftar Pertanyaan ({filteredPertanyaan.length} dari {pertanyaan.length})
+                          {!tablesStatus.pertanyaan && (
+                            <Badge colorScheme="yellow" ml={2} fontSize="xs">
+                              Data Sementara
+                            </Badge>
+                          )}
                         </Heading>
                         
                         {/* Search and Filter */}
@@ -1102,6 +1281,11 @@ export default function PertanyaanManagement() {
                         <Heading size="md">Kelola Jenis Penyakit & Rentang Nilai</Heading>
                         <Text fontSize="sm" color="gray.600">
                           {jenisPenyakit.length} penyakit • {pertanyaan.length} pertanyaan
+                          {!tablesStatus.penyakit_config && (
+                            <Badge colorScheme="yellow" ml={2} fontSize="xs">
+                              Data Sementara
+                            </Badge>
+                          )}
                         </Text>
                       </VStack>
                       <Button
@@ -1255,6 +1439,7 @@ export default function PertanyaanManagement() {
               leftIcon={<FiPlus />}
             >
               Tambah Penyakit
+              {!tablesStatus.penyakit_config && ' (Sementara)'}
             </Button>
           </ModalFooter>
         </ModalContent>
@@ -1397,6 +1582,7 @@ export default function PertanyaanManagement() {
               isLoading={submitting}
             >
               Update Pertanyaan
+              {!tablesStatus.pertanyaan && ' (Sementara)'}
             </Button>
           </ModalFooter>
         </ModalContent>
