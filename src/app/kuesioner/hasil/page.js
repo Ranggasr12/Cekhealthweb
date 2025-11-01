@@ -1,5 +1,8 @@
 "use client";
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'edge';
+
 import { 
   Box, 
   Container, 
@@ -13,14 +16,33 @@ import {
   Alert,
   AlertIcon,
   HStack,
-  Badge
+  Badge,
+  Spinner
 } from "@chakra-ui/react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 export default function HasilPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const [isClient, setIsClient] = useState(false);
   
+  // Pastikan ini hanya berjalan di client side
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  if (!isClient) {
+    return (
+      <Container maxW="container.md" py={8}>
+        <VStack spacing={6} align="center" justify="center" minH="400px">
+          <Spinner size="xl" color="purple.500" thickness="3px" />
+          <Text color="gray.600" fontSize="lg">Memuat hasil kuesioner...</Text>
+        </VStack>
+      </Container>
+    );
+  }
+
   const skor = parseInt(searchParams.get('skor')) || 0;
   const totalPertanyaan = parseInt(searchParams.get('total')) || 0;
   const nama = searchParams.get('nama') || 'Pengguna';

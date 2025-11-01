@@ -79,7 +79,7 @@ export default function UsersManagement() {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, usersCollectionRef]); // ✅ Fixed: Added usersCollectionRef dependency
 
   useEffect(() => {
     fetchUsers();
@@ -314,8 +314,8 @@ export default function UsersManagement() {
               <Text fontWeight="bold">Informasi Management User</Text>
               <Text fontSize="sm">
                 • User akan otomatis terdaftar di Firestore saat pertama kali login<br/>
-                • Role "admin" memberikan akses penuh ke panel admin<br/>
-                • Role "user" adalah role default untuk pengguna biasa
+                • Role &quot;admin&quot; memberikan akses penuh ke panel admin<br/>
+                • Role &quot;user&quot; adalah role default untuk pengguna biasa
               </Text>
             </Box>
           </Alert>
