@@ -19,8 +19,6 @@ import {
   CardBody,
   HStack,
   Link,
-  Alert,
-  AlertIcon,
   Spinner,
 } from "@chakra-ui/react";
 import { ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
@@ -47,7 +45,6 @@ export default function LoginPage() {
     // Check if user is already logged in
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        console.log("✅ User already logged in:", user.email);
         router.push("/");
       }
     });
@@ -72,8 +69,6 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      console.log("🔄 Attempting login with:", email);
-
       const userCredential = await signInWithEmailAndPassword(
         auth, 
         email.trim().toLowerCase(), 
@@ -82,10 +77,8 @@ export default function LoginPage() {
 
       const user = userCredential.user;
       
-      console.log("✅ Login successful:", user.email);
-      
       toast({
-        title: "Login Berhasil! 🎉",
+        title: "Login Berhasil!",
         description: `Selamat datang ${user.email}`,
         status: "success",
         duration: 3000,
@@ -98,8 +91,6 @@ export default function LoginPage() {
       }, 1500);
 
     } catch (error) {
-      console.error("❌ Login error:", error.code, error.message);
-      
       let errorMessage = "Login gagal. Silakan coba lagi.";
       
       if (error.code === 'auth/invalid-credential') {
@@ -112,17 +103,6 @@ export default function LoginPage() {
         errorMessage = "Terlalu banyak percobaan login. Silakan coba lagi nanti.";
       } else if (error.code === 'auth/invalid-email') {
         errorMessage = "Format email tidak valid.";
-      } else if (error.code === 'auth/operation-not-allowed') {
-        errorMessage = "Login dengan email/password belum diaktifkan. Silakan hubungi administrator.";
-        
-        // Show detailed instructions
-        toast({
-          title: "Setup Required 🔧",
-          description: "Email/Password auth perlu diaktifkan di Firebase Console",
-          status: "warning",
-          duration: 8000,
-          isClosable: true,
-        });
       } else if (error.code === 'auth/network-request-failed') {
         errorMessage = "Koneksi internet bermasalah. Silakan cek koneksi Anda.";
       }
@@ -174,19 +154,6 @@ export default function LoginPage() {
           <Card w="full" shadow="md">
             <CardBody>
               <VStack as="form" spacing={6} onSubmit={handleLogin}>
-                {/* Demo Accounts Info */}
-                <Alert status="info" borderRadius="md">
-                  <AlertIcon />
-                  <Box>
-                    <Text fontWeight="bold" fontSize="sm">
-                      Test Account
-                    </Text>
-                    <Text fontSize="sm">
-                      Email: admin@cekhealth.com | Password: admin123
-                    </Text>
-                  </Box>
-                </Alert>
-
                 {/* Email Input */}
                 <FormControl isRequired>
                   <FormLabel>Email</FormLabel>
@@ -194,7 +161,7 @@ export default function LoginPage() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="admin@cekhealth.com"
+                    placeholder="masukkan email Anda"
                     size="lg"
                     autoComplete="email"
                   />
@@ -230,7 +197,7 @@ export default function LoginPage() {
                   size="lg"
                   colorScheme="purple"
                   isLoading={loading}
-                  loadingText="Logging in..."
+                  loadingText="Sedang masuk..."
                   bgGradient="linear(to-r, purple.500, pink.500)"
                   _hover={{
                     bgGradient: "linear(to-r, purple.600, pink.600)",
@@ -239,7 +206,7 @@ export default function LoginPage() {
                   }}
                   transition="all 0.2s"
                 >
-                  Login
+                  Masuk
                 </Button>
 
                 {/* Register Link */}
@@ -254,29 +221,6 @@ export default function LoginPage() {
                     Daftar di sini
                   </Link>
                 </HStack>
-              </VStack>
-            </CardBody>
-          </Card>
-
-          {/* Setup Instructions - Show if auth not enabled */}
-          <Card w="full" bg="blue.50" borderColor="blue.200">
-            <CardBody>
-              <VStack align="start" spacing={3}>
-                <Heading size="sm" color="blue.800">
-                  Setup Instructions 🔧
-                </Heading>
-                <Text fontSize="sm" color="blue.700">
-                  1. Buka <Link href="https://console.firebase.google.com/" color="blue.600" fontWeight="bold" isExternal>Firebase Console</Link>
-                </Text>
-                <Text fontSize="sm" color="blue.700">
-                  2. Pilih project <strong>cekhealthweb</strong>
-                </Text>
-                <Text fontSize="sm" color="blue.700">
-                  3. Authentication → Sign-in method → Email/Password → <strong>Enable</strong>
-                </Text>
-                <Text fontSize="sm" color="blue.700">
-                  4. Users tab → Add user → Email: admin@cekhealth.com, Password: admin123
-                </Text>
               </VStack>
             </CardBody>
           </Card>

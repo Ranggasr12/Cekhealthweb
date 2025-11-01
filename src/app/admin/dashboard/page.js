@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { 
-  Container, 
   Heading, 
   Text, 
   VStack,
@@ -11,28 +10,26 @@ import {
   SimpleGrid,
   Card,
   CardBody,
-  Stat,
-  StatLabel,
-  StatNumber,
-  StatHelpText,
-  Alert,
-  AlertIcon,
   Badge,
   Spinner,
   HStack,
   Icon,
-  Flex,
-  Progress,
+  Input,
+  InputGroup,
+  InputLeftElement,
+  Select,
+  Table,
+  Thead,
+  Tbody,
+  Tr,
+  Th,
+  Td,
   useBreakpointValue,
-  Grid,
-  GridItem
 } from '@chakra-ui/react';
 import { useRouter } from 'next/navigation';
 import { 
   collection,
-  getCountFromServer,
-  query,
-  where
+  getCountFromServer
 } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
@@ -43,8 +40,8 @@ import {
   FiVideo, 
   FiHelpCircle, 
   FiSettings,
-  FiArrowRight,
-  FiCheckCircle
+  FiSearch,
+  FiPlus,
 } from 'react-icons/fi';
 
 export default function AdminDashboard() {
@@ -53,16 +50,10 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
+  // Responsive values
   const gridColumns = useBreakpointValue({ 
-    base: 1, 
-    md: 2, 
-    lg: 4 
-  });
-
-  const actionColumns = useBreakpointValue({
-    base: 1,
-    md: 2,
-    lg: 3
+    base: 2, 
+    sm: 4 
   });
 
   useEffect(() => {
@@ -81,7 +72,6 @@ export default function AdminDashboard() {
 
   const loadStats = async () => {
     try {
-      // Count documents dari Firestore collections
       const [
         videosSnapshot,
         pertanyaanSnapshot,
@@ -102,7 +92,6 @@ export default function AdminDashboard() {
       });
     } catch (error) {
       console.error('Error loading stats:', error);
-      // Fallback values
       setStats({
         videos: 0,
         pertanyaan: 0,
@@ -112,362 +101,319 @@ export default function AdminDashboard() {
     }
   };
 
-  const StatCard = ({ icon, label, value, helpText, color = "blue" }) => (
-    <Card 
-      bg="white"
-      border="1px"
-      borderColor={`${color}.100`}
-      boxShadow="sm"
-      _hover={{ 
-        transform: 'translateY(-4px)', 
-        shadow: 'md',
-        borderColor: `${color}.200`
-      }}
-      transition="all 0.3s ease"
-      height="100%"
-    >
-      <CardBody>
-        <VStack align="stretch" spacing={4}>
-          <HStack justify="space-between" align="flex-start">
-            <Box>
-              <Stat>
-                <StatLabel 
-                  color="gray.600" 
-                  fontSize={{ base: "sm", md: "md" }}
-                  fontWeight="medium"
-                >
-                  {label}
-                </StatLabel>
-                <StatNumber 
-                  color={`${color}.600`} 
-                  fontSize={{ base: "2xl", md: "3xl" }}
-                  fontWeight="bold"
-                >
-                  {value}
-                </StatNumber>
-                <StatHelpText color="gray.500" fontSize="sm">
-                  {helpText}
-                </StatHelpText>
-              </Stat>
-            </Box>
-            <Icon 
-              as={icon} 
-              boxSize={{ base: 6, md: 8 }} 
-              color={`${color}.500`} 
-              opacity={0.8}
-            />
-          </HStack>
-          <Progress 
-            value={100} 
-            size="sm" 
-            colorScheme={color}
-            borderRadius="full"
-            opacity={0.6}
-          />
-        </VStack>
-      </CardBody>
-    </Card>
-  );
-
-  const ActionButton = ({ icon, label, onClick, colorScheme = "blue" }) => (
-    <Button 
-      colorScheme={colorScheme}
-      onClick={onClick}
-      height={{ base: "70px", md: "80px" }}
-      fontSize={{ base: "md", md: "lg" }}
-      leftIcon={<Icon as={icon} />}
-      rightIcon={<Icon as={FiArrowRight} />}
-      variant="outline"
-      _hover={{ 
-        transform: 'translateY(-2px)', 
-        shadow: 'md',
-        bg: `${colorScheme}.50`
-      }}
-      transition="all 0.2s"
-      display="flex"
-      flexDirection="column"
-      alignItems="center"
-      justifyContent="center"
-      gap={2}
-      py={4}
-    >
-      <Text fontWeight="semibold">{label}</Text>
-    </Button>
-  );
-
-  const SystemStatusItem = ({ label, status, colorScheme = "green" }) => (
-    <HStack 
-      justify="space-between" 
-      p={3} 
-      bg="white"
-      borderRadius="md"
-      border="1px"
-      borderColor="gray.100"
-      _hover={{ bg: 'gray.50' }}
-    >
-      <HStack spacing={3}>
-        <Icon 
-          as={FiCheckCircle} 
-          color={`${colorScheme}.500`} 
-          boxSize={5} 
-        />
-        <Text color="gray.700" fontSize="sm">{label}</Text>
-      </HStack>
-      <Badge colorScheme={colorScheme} fontSize="xs">
-        {status}
-      </Badge>
-    </HStack>
-  );
+  // Sample data for recent activities
+  const recentActivities = [
+    {
+      id: 1,
+      user: "user123",
+      action: "Melakukan diagnosa",
+      disease: "Anemia",
+      time: "2 jam yang lalu"
+    },
+    {
+      id: 2,
+      user: "user456", 
+      action: "Menonton video edukasi",
+      video: "Pencegahan Anemia",
+      time: "5 jam yang lalu"
+    },
+    {
+      id: 3,
+      user: "user789",
+      action: "Menyelesaikan kuesioner",
+      time: "1 hari yang lalu"
+    }
+  ];
 
   if (loading) {
     return (
       <AdminLayout>
-        <Container maxW="container.xl" py={8}>
+        <Box 
+          ml={{ base: 0, md: "10px" }}
+          mt="60px"
+          px={4}
+          py={6}
+        >
           <VStack spacing={6} align="center" justify="center" minH="400px">
-            <Spinner size="xl" color="purple.500" thickness="3px" />
+            <Spinner size="xl" color="purple.500" />
             <Text color="gray.600">Memuat dashboard...</Text>
-            <Progress size="xs" isIndeterminate width="200px" colorScheme="purple" />
           </VStack>
-        </Container>
+        </Box>
       </AdminLayout>
     );
   }
 
   return (
     <AdminLayout>
-      <Container maxW="container.xl" py={{ base: 4, md: 8 }}>
-        <VStack spacing={{ base: 6, md: 8 }} align="stretch">
+      <Box 
+        ml={{ base: 0, md: "10px" }}
+        mt="60px"
+        minH="calc(100vh - 60px)"
+        bg="gray.50"
+        px={4}
+        py={4}
+        width={{ 
+          base: "100%", 
+          md: "calc(100vw - 290px)",
+          lg: "calc(100vw - 300px)" 
+        }}
+        maxW="100%"
+        overflow="hidden"
+      >
+        <VStack spacing={4} align="stretch" width="100%">
+          
           {/* Header */}
-          <Box>
-            <Flex 
-              justify="space-between" 
-              align={{ base: "flex-start", md: "center" }}
-              direction={{ base: "column", md: "row" }}
-              gap={4}
-            >
-              <Box>
-                <Heading 
-                  size={{ base: "lg", md: "xl" }} 
-                  color="purple.600" 
-                  mb={2}
-                  bgGradient="linear(to-r, purple.600, pink.500)"
-                  bgClip="text"
-                >
-                  🎉 Dashboard Admin
-                </Heading>
-                <Text color="gray.600" fontSize={{ base: "md", md: "lg" }}>
-                  Selamat datang di HealthCheck Admin Panel
-                </Text>
-                {user && (
-                  <HStack mt={2} spacing={2}>
-                    <Text fontSize="sm" color="gray.500">
-                      Login sebagai:
-                    </Text>
-                    <Badge colorScheme="green" fontSize="xs" textTransform="none">
-                      {user.email}
-                    </Badge>
-                  </HStack>
-                )}
-              </Box>
-              <Text 
-                fontSize="sm" 
-                color="gray.500" 
-                bg="gray.100" 
-                px={3} 
-                py={1} 
-                borderRadius="full"
-                textAlign="center"
-              >
-                {new Date().toLocaleDateString('id-ID', { 
-                  weekday: 'long', 
-                  year: 'numeric', 
-                  month: 'long', 
-                  day: 'numeric' 
-                })}
+          <Box width="100%">
+            <VStack spacing={1} align="start">
+              <Heading size="lg" color="gray.800" fontWeight="bold">
+                Dashboard Admin
+              </Heading>
+              <Text fontSize="md" color="gray.600">
+                Kelola sistem diagnosa kesehatan dengan konfigurasi lengkap
               </Text>
-            </Flex>
+            </VStack>
           </Box>
-
-          {/* Success Alert */}
-          <Alert 
-            status="success" 
-            borderRadius="lg" 
-            variant="left-accent"
-            fontSize={{ base: "sm", md: "md" }}
-          >
-            <AlertIcon />
-            <Box>
-              <Text fontWeight="bold">Sistem Berjalan dengan Baik! 🚀</Text>
-              <Text fontSize="sm">
-                Panel admin berfungsi penuh. Semua sistem operasional.
-              </Text>
-            </Box>
-          </Alert>
 
           {/* Statistics Grid */}
-          <SimpleGrid 
-            columns={gridColumns} 
-            spacing={{ base: 4, md: 6 }}
-          >
-            <StatCard
-              icon={FiUsers}
-              label="Total Pengguna"
-              value={stats.users || 0}
-              helpText="Pengguna terdaftar"
-              color="purple"
-            />
-            <StatCard
-              icon={FiActivity}
-              label="Total Diagnosa"
-              value={stats.diagnosa || 0}
-              helpText="Pengecekan kesehatan"
-              color="green"
-            />
-            <StatCard
-              icon={FiVideo}
-              label="Total Video"
-              value={stats.videos || 0}
-              helpText="Konten edukasi"
-              color="blue"
-            />
-            <StatCard
-              icon={FiHelpCircle}
-              label="Total Pertanyaan"
-              value={stats.pertanyaan || 0}
-              helpText="Pertanyaan kesehatan"
-              color="orange"
-            />
+          <SimpleGrid columns={gridColumns} spacing={3} width="100%">
+            <Card bg="white" shadow="sm" border="1px" borderColor="gray.200" borderRadius="md" width="100%">
+              <CardBody p={3}>
+                <VStack spacing={1} align="start">
+                  <Text fontSize="xl" fontWeight="bold" color="purple.600">
+                    {stats.users || 0}
+                  </Text>
+                  <Text fontSize="sm" color="gray.600" fontWeight="medium">
+                    Total Pengguna
+                  </Text>
+                </VStack>
+              </CardBody>
+            </Card>
+
+            <Card bg="white" shadow="sm" border="1px" borderColor="gray.200" borderRadius="md" width="100%">
+              <CardBody p={3}>
+                <VStack spacing={1} align="start">
+                  <Text fontSize="xl" fontWeight="bold" color="green.600">
+                    {stats.diagnosa || 0}
+                  </Text>
+                  <Text fontSize="sm" color="gray.600" fontWeight="medium">
+                    Total Diagnosa
+                  </Text>
+                </VStack>
+              </CardBody>
+            </Card>
+
+            <Card bg="white" shadow="sm" border="1px" borderColor="gray.200" borderRadius="md" width="100%">
+              <CardBody p={3}>
+                <VStack spacing={1} align="start">
+                  <Text fontSize="xl" fontWeight="bold" color="blue.600">
+                    {stats.videos || 0}
+                  </Text>
+                  <Text fontSize="sm" color="gray.600" fontWeight="medium">
+                    Total Video
+                  </Text>
+                </VStack>
+              </CardBody>
+            </Card>
+
+            <Card bg="white" shadow="sm" border="1px" borderColor="gray.200" borderRadius="md" width="100%">
+              <CardBody p={3}>
+                <VStack spacing={1} align="start">
+                  <Text fontSize="xl" fontWeight="bold" color="orange.600">
+                    {stats.pertanyaan || 0}
+                  </Text>
+                  <Text fontSize="sm" color="gray.600" fontWeight="medium">
+                    Total Pertanyaan
+                  </Text>
+                </VStack>
+              </CardBody>
+            </Card>
           </SimpleGrid>
 
-          {/* Quick Actions */}
-          <Box>
-            <Heading 
-              size="md" 
-              color="gray.700" 
-              mb={4}
-              fontSize={{ base: "lg", md: "xl" }}
-            >
+          {/* Quick Actions Header */}
+          <HStack justify="space-between" align="center" width="100%">
+            <Heading size="md" color="gray.800">
               Quick Actions
             </Heading>
-            <SimpleGrid 
-              columns={actionColumns} 
-              spacing={{ base: 3, md: 4 }}
+            <Button
+              leftIcon={<Icon as={FiPlus} />}
+              colorScheme="purple"
+              size="sm"
+              variant="solid"
             >
-              <ActionButton
-                icon={FiHelpCircle}
-                label="Kelola Pertanyaan"
-                onClick={() => router.push('/admin/pertanyaan')}
-                colorScheme="blue"
-              />
-              <ActionButton
-                icon={FiVideo}
-                label="Kelola Video"
-                onClick={() => router.push('/admin/videos')}
-                colorScheme="green"
-              />
-              <ActionButton
-                icon={FiSettings}
-                label="Pengaturan"
-                onClick={() => router.push('/admin/settings')}
-                colorScheme="purple"
-              />
-            </SimpleGrid>
-          </Box>
+              Tambah Konten
+            </Button>
+          </HStack>
 
-          {/* System Status */}
-          <Card 
-            bg="white" 
-            border="1px" 
-            borderColor="gray.200"
-            shadow="sm"
-          >
-            <CardBody>
-              <VStack spacing={4} align="stretch">
-                <Heading 
-                  size="md" 
-                  color="gray.700"
-                  fontSize={{ base: "lg", md: "xl" }}
-                >
-                  Status Sistem
+          {/* Search and Filter Section */}
+          <Card bg="white" shadow="sm" border="1px" borderColor="gray.200" borderRadius="md" width="100%">
+            <CardBody p={4}>
+              <SimpleGrid 
+                columns={{ base: 1, md: 3 }} 
+                spacing={4}
+                width="100%"
+              >
+                <InputGroup size="sm" width="100%">
+                  <InputLeftElement>
+                    <Icon as={FiSearch} color="gray.400" />
+                  </InputLeftElement>
+                  <Input 
+                    placeholder="Cari pengguna, diagnosa..." 
+                    borderRadius="md"
+                    width="100%"
+                  />
+                </InputGroup>
+                
+                <Select placeholder="Filter Bulan" size="sm" borderRadius="md" width="100%">
+                  <option>Januari 2024</option>
+                  <option>Februari 2024</option>
+                  <option>Maret 2024</option>
+                </Select>
+
+                <Select placeholder="Filter Status" size="sm" borderRadius="md" width="100%">
+                  <option>Aktif</option>
+                  <option>Non-Aktif</option>
+                  <option>Semua</option>
+                </Select>
+              </SimpleGrid>
+            </CardBody>
+          </Card>
+
+          {/* Quick Actions Grid - TEXT TIDAK KELUAR BUTTON */}
+          <SimpleGrid columns={{ base: 1, md: 3 }} spacing={3} width="100%">
+            {/* Button 1 - Kelola Pertanyaan */}
+            <Button
+              leftIcon={<Icon as={FiHelpCircle} />}
+              colorScheme="blue"
+              size="md"
+              height="70px"
+              onClick={() => router.push('/admin/pertanyaan')}
+              justifyContent="flex-start"
+              variant="outline"
+              border="1px"
+              borderColor="blue.200"
+              _hover={{ bg: 'blue.50' }}
+              width="100%"
+              whiteSpace="normal"
+              textAlign="left"
+              px={3}
+            >
+              <Box textAlign="left" width="100%">
+                <Text fontWeight="bold" fontSize="sm" noOfLines={1}>
+                  Kelola Pertanyaan
+                </Text>
+                <Text fontSize="xs" color="gray.600" noOfLines={1}>
+                  Kuesioner kesehatan
+                </Text>
+              </Box>
+            </Button>
+
+            {/* Button 2 - Kelola Video */}
+            <Button
+              leftIcon={<Icon as={FiVideo} />}
+              colorScheme="green"
+              size="md"
+              height="70px"
+              onClick={() => router.push('/admin/videos')}
+              justifyContent="flex-start"
+              variant="outline"
+              border="1px"
+              borderColor="green.200"
+              _hover={{ bg: 'green.50' }}
+              width="100%"
+              whiteSpace="normal"
+              textAlign="left"
+              px={3}
+            >
+              <Box textAlign="left" width="100%">
+                <Text fontWeight="bold" fontSize="sm" noOfLines={1}>
+                  Kelola Video
+                </Text>
+                <Text fontSize="xs" color="gray.600" noOfLines={1}>
+                  Konten edukasi
+                </Text>
+              </Box>
+            </Button>
+
+            {/* Button 3 - Pengaturan */}
+            <Button
+              leftIcon={<Icon as={FiSettings} />}
+              colorScheme="purple"
+              size="md"
+              height="70px"
+              onClick={() => router.push('/admin/settings')}
+              justifyContent="flex-start"
+              variant="outline"
+              border="1px"
+              borderColor="purple.200"
+              _hover={{ bg: 'purple.50' }}
+              width="100%"
+              whiteSpace="normal"
+              textAlign="left"
+              px={3}
+            >
+              <Box textAlign="left" width="100%">
+                <Text fontWeight="bold" fontSize="sm" noOfLines={1}>
+                  Pengaturan
+                </Text>
+                <Text fontSize="xs" color="gray.600" noOfLines={1}>
+                  Pengaturan sistem
+                </Text>
+              </Box>
+            </Button>
+          </SimpleGrid>
+
+          {/* Recent Activities */}
+          <Card bg="white" shadow="sm" border="1px" borderColor="gray.200" borderRadius="md" width="100%">
+            <CardBody p={4} width="100%">
+              <VStack spacing={3} align="stretch" width="100%">
+                <Heading size="md" color="gray.800">
+                  Aktivitas Terbaru
                 </Heading>
-                <Grid 
-                  templateColumns={{ 
-                    base: "1fr", 
-                    md: "repeat(2, 1fr)" 
-                  }} 
-                  gap={3}
-                >
-                  <GridItem>
-                    <SystemStatusItem 
-                      label="Firebase Connection" 
-                      status="Connected" 
-                      colorScheme="green"
-                    />
-                  </GridItem>
-                  <GridItem>
-                    <SystemStatusItem 
-                      label="Authentication" 
-                      status="Working" 
-                      colorScheme="green"
-                    />
-                  </GridItem>
-                  <GridItem>
-                    <SystemStatusItem 
-                      label="Admin Access" 
-                      status="Verified" 
-                      colorScheme="green"
-                    />
-                  </GridItem>
-                  <GridItem>
-                    <SystemStatusItem 
-                      label="All Features" 
-                      status="Operational" 
-                      colorScheme="green"
-                    />
-                  </GridItem>
-                </Grid>
+                
+                <Box width="100%" overflowX="auto">
+                  <Table variant="simple" size="sm" minWidth="600px">
+                    <Thead bg="gray.50">
+                      <Tr>
+                        <Th fontWeight="bold" color="gray.700" fontSize="xs" width="20%">PENGGUNA</Th>
+                        <Th fontWeight="bold" color="gray.700" fontSize="xs" width="25%">AKTIVITAS</Th>
+                        <Th fontWeight="bold" color="gray.700" fontSize="xs" width="25%">DETAIL</Th>
+                        <Th fontWeight="bold" color="gray.700" fontSize="xs" width="30%">WAKTU</Th>
+                      </Tr>
+                    </Thead>
+                    <Tbody>
+                      {recentActivities.map((activity) => (
+                        <Tr key={activity.id} _hover={{ bg: 'gray.50' }}>
+                          <Td width="20%">
+                            <Text fontWeight="medium" fontSize="sm" noOfLines={1}>
+                              {activity.user}
+                            </Text>
+                          </Td>
+                          <Td width="25%">
+                            <Badge colorScheme="blue" fontSize="xs" px={2} py={1} noOfLines={1}>
+                              {activity.action}
+                            </Badge>
+                          </Td>
+                          <Td width="25%">
+                            <Text fontSize="sm" color="gray.600" noOfLines={1}>
+                              {activity.disease || activity.video || '-'}
+                            </Text>
+                          </Td>
+                          <Td width="30%">
+                            <Text fontSize="sm" color="gray.500" noOfLines={1}>
+                              {activity.time}
+                            </Text>
+                          </Td>
+                        </Tr>
+                      ))}
+                    </Tbody>
+                  </Table>
+                </Box>
               </VStack>
             </CardBody>
           </Card>
 
-          {/* Additional Info */}
-          <SimpleGrid 
-            columns={{ base: 1, md: 2 }} 
-            spacing={{ base: 4, md: 6 }}
-            mt={4}
-          >
-            <Card bg="blue.50" border="1px" borderColor="blue.200">
-              <CardBody>
-                <VStack align="start" spacing={2}>
-                  <Text fontWeight="bold" color="blue.800">
-                    💡 Tips Admin
-                  </Text>
-                  <Text fontSize="sm" color="blue.700">
-                    • Periksa pertanyaan kesehatan secara berkala<br/>
-                    • Update video edukasi setiap bulan<br/>
-                    • Backup data penting secara rutin
-                  </Text>
-                </VStack>
-              </CardBody>
-            </Card>
-            
-            <Card bg="green.50" border="1px" borderColor="green.200">
-              <CardBody>
-                <VStack align="start" spacing={2}>
-                  <Text fontWeight="bold" color="green.800">
-                    📊 Analytics
-                  </Text>
-                  <Text fontSize="sm" color="green.700">
-                    • {stats.users} pengguna aktif<br/>
-                    • {stats.diagnosa} diagnosa dilakukan<br/>
-                    • Sistem berjalan optimal
-                  </Text>
-                </VStack>
-              </CardBody>
-            </Card>
-          </SimpleGrid>
         </VStack>
-      </Container>
+      </Box>
     </AdminLayout>
   );
 }

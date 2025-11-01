@@ -182,7 +182,7 @@ export default function Home() {
           zIndex={0}
         />
 
-        {/* Konten utama */}
+        {/* Konten utama - DITURUNKAN POSISINYA */}
         <Flex
           direction={{ base: "column", lg: "row" }}
           align="center"
@@ -194,7 +194,8 @@ export default function Home() {
           px={{ base: 4, md: 6, lg: 20 }}
           position="relative"
           zIndex={2}
-          mt={{ base: "-60px", md: "-80px", lg: "-100px" }}
+          // DITURUNKAN: margin top dikurangi atau dihapus
+          mt={{ base: "40px", md: "60px", lg: "80px" }} // DARI -60px MENJADI 40px
         >
           <Box 
             flex="1"

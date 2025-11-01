@@ -13,8 +13,9 @@ const poppins = Poppins({
 export const metadata = {
   title: 'HealthCheck - Cek Kesehatan Online',
   description: 'Platform cek kesehatan online',
+  // ✅ TAMBAHKAN KONFIGURASI INI
   icons: {
-    icon: '/favicon.ico', // ✅ Pastikan file ini ada
+    icon: '/favicon.ico',
     shortcut: '/favicon.ico',
     apple: '/favicon.ico',
   },
@@ -24,9 +25,8 @@ export default function RootLayout({ children }) {
   return (
     <html lang="id" suppressHydrationWarning>
       <head>
-        {/* ✅ Manual fallback */}
+        {/* ✅ OPTIONAL: Manual link untuk pastikan */}
         <link rel="icon" href="/favicon.ico" type="image/x-icon" />
-        <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
       </head>
       <body className={poppins.className} suppressHydrationWarning>
         <ChakraProvider>
