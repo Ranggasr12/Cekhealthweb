@@ -28,7 +28,14 @@ import {
   GridItem
 } from '@chakra-ui/react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { 
+  collection,
+  getCountFromServer,
+  query,
+  where
+} from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth, db } from '@/lib/firebase';
 import AdminLayout from '@/components/AdminLayout';
 import { 
   FiUsers, 
@@ -59,45 +66,51 @@ export default function AdminDashboard() {
   });
 
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true);
-        const { data: { session } } = await supabase.auth.getSession();
-        setUser(session?.user);
-
-        if (!session) {
-          router.push('/login');
-          return;
-        }
-
-        // Load stats
-        const [
-          videosResult,
-          pertanyaanResult,
-          usersResult,
-          diagnosaResult
-        ] = await Promise.all([
-          supabase.from('videos').select('*', { count: 'exact', head: true }),
-          supabase.from('pertanyaan').select('*', { count: 'exact', head: true }),
-          supabase.from('profiles').select('*', { count: 'exact', head: true }),
-          supabase.from('hasil_diagnosa').select('*', { count: 'exact', head: true })
-        ]);
-
-        setStats({
-          videos: videosResult.count || 0,
-          pertanyaan: pertanyaanResult.count || 0,
-          users: usersResult.count || 0,
-          diagnosa: diagnosaResult.count || 0
-        });
-      } catch (error) {
-        console.error('Error loading dashboard data:', error);
-      } finally {
-        setLoading(false);
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setUser(user);
+        await loadStats();
+      } else {
+        router.push('/login');
       }
-    };
+      setLoading(false);
+    });
 
-    loadData();
+    return () => unsubscribe();
   }, [router]);
+
+  const loadStats = async () => {
+    try {
+      // Count documents dari Firestore collections
+      const [
+        videosSnapshot,
+        pertanyaanSnapshot,
+        usersSnapshot,
+        diagnosaSnapshot
+      ] = await Promise.all([
+        getCountFromServer(collection(db, 'videos')),
+        getCountFromServer(collection(db, 'pertanyaan')),
+        getCountFromServer(collection(db, 'users')),
+        getCountFromServer(collection(db, 'hasil_diagnosa'))
+      ]);
+
+      setStats({
+        videos: videosSnapshot.data().count || 0,
+        pertanyaan: pertanyaanSnapshot.data().count || 0,
+        users: usersSnapshot.data().count || 0,
+        diagnosa: diagnosaSnapshot.data().count || 0
+      });
+    } catch (error) {
+      console.error('Error loading stats:', error);
+      // Fallback values
+      setStats({
+        videos: 0,
+        pertanyaan: 0,
+        users: 0,
+        diagnosa: 0
+      });
+    }
+  };
 
   const StatCard = ({ icon, label, value, helpText, color = "blue" }) => (
     <Card 
@@ -386,7 +399,7 @@ export default function AdminDashboard() {
                 >
                   <GridItem>
                     <SystemStatusItem 
-                      label="Database Connection" 
+                      label="Firebase Connection" 
                       status="Connected" 
                       colorScheme="green"
                     />

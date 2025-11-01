@@ -19,7 +19,6 @@ import {
   Divider,
   Icon,
   Flex,
-  Progress,
   Alert,
   AlertIcon,
   AlertTitle,
@@ -30,25 +29,25 @@ import {
   Spinner
 } from '@chakra-ui/react';
 import { 
-  supabase, 
-  getProfile, 
-  updateProfile, 
-  uploadAvatar, 
-  deleteAvatar, 
-  validateImageFile,
-  getCurrentUser,
-  getSession,
-  createProfile
-} from '@/lib/supabase';
-import { FiUser, FiCamera, FiSave, FiCheck, FiUpload, FiX, FiMail } from 'react-icons/fi';
+  onAuthStateChanged,
+  updateProfile,
+  updatePassword,
+  reauthenticateWithCredential,
+  EmailAuthProvider
+} from 'firebase/auth';
+import { 
+  doc, 
+  getDoc, 
+  updateDoc 
+} from 'firebase/firestore';
+import { auth, db } from '@/lib/firebase';
+import { FiUser, FiSave, FiMail, FiLock } from 'react-icons/fi';
 
 export default function ProfilePage() {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [formErrors, setFormErrors] = useState({});
   
   const toast = useToast();
@@ -57,80 +56,60 @@ export default function ProfilePage() {
 
   const [formData, setFormData] = useState({
     full_name: '',
-    username: ''
+    email: ''
   });
 
   useEffect(() => {
-    loadUserAndProfile();
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setUser(user);
+        await loadUserProfile(user);
+      } else {
+        setUser(null);
+        setProfile(null);
+        setLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  // Fungsi untuk debug error secara detail
-  const debugError = (error, context) => {
-    console.group(`🔍 Error Debug: ${context}`);
-    console.log('Error object:', error);
-    console.log('Error message:', error?.message);
-    console.log('Error code:', error?.code);
-    console.log('Error details:', error?.details);
-    console.log('Error hint:', error?.hint);
-    console.log('Error stack:', error?.stack);
-    console.log('Stringified error:', JSON.stringify(error, null, 2));
-    console.groupEnd();
-  };
-
-  const loadUserAndProfile = async () => {
+  const loadUserProfile = async (user) => {
     try {
       setLoading(true);
-      const { data: { session }, error: sessionError } = await getSession();
       
-      if (sessionError) {
-        debugError(sessionError, 'Session Error');
-        throw new Error('Gagal memuat session pengguna');
-      }
-
-      if (!session?.user) {
-        throw new Error('Tidak ada user yang login');
-      }
-
-      setUser(session.user);
-
-      const { data: profileData, error: profileError } = await getProfile(session.user.id);
-
-      if (profileError) {
-        debugError(profileError, 'Profile Load Error');
-        
-        // Jika profile tidak ditemukan, buat profile baru
-        if (profileError.code === 'PGRST116') {
-          console.log('Profile not found, creating new profile...');
-          const { data: newProfile, error: createError } = await createProfile(session.user.id, {
-            full_name: '',
-            username: ''
-          });
-          
-          if (createError) {
-            debugError(createError, 'Profile Create Error');
-            throw createError;
-          }
-          
-          setProfile(newProfile);
-          setFormData({
-            full_name: newProfile.full_name || '',
-            username: newProfile.username || ''
-          });
-        } else {
-          throw profileError;
-        }
-      } else {
+      // Get user profile from Firestore
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      
+      if (userDoc.exists()) {
+        const profileData = userDoc.data();
         setProfile(profileData);
         setFormData({
-          full_name: profileData.full_name || '',
-          username: profileData.username || ''
+          full_name: profileData.full_name || user.displayName || '',
+          email: user.email || ''
+        });
+      } else {
+        // If profile doesn't exist, create one
+        const profileData = {
+          full_name: user.displayName || '',
+          email: user.email,
+          role: 'user',
+          created_at: new Date(),
+          updated_at: new Date()
+        };
+        
+        await updateDoc(doc(db, 'users', user.uid), profileData);
+        setProfile(profileData);
+        setFormData({
+          full_name: profileData.full_name,
+          email: user.email || ''
         });
       }
     } catch (error) {
       console.error('Error loading profile:', error);
       toast({
         title: 'Error',
-        description: error.message || 'Gagal memuat profil',
+        description: 'Gagal memuat profil',
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -142,16 +121,6 @@ export default function ProfilePage() {
 
   const validateForm = () => {
     const errors = {};
-
-    // Validasi username
-    if (formData.username) {
-      if (formData.username.length < 3) {
-        errors.username = 'Username harus minimal 3 karakter';
-      }
-      if (!/^[a-zA-Z0-9_]+$/.test(formData.username)) {
-        errors.username = 'Username hanya boleh mengandung huruf, angka, dan underscore';
-      }
-    }
 
     // Validasi full_name
     if (formData.full_name && formData.full_name.length > 100) {
@@ -208,13 +177,9 @@ export default function ProfilePage() {
       setSaving(true);
       
       console.log('🔄 Starting profile update...');
-      console.log('User ID:', user.id);
-      console.log('Form data to save:', formData);
 
-      // Cek apakah ada perubahan data
-      const hasChanges = 
-        formData.full_name !== (profile?.full_name || '') ||
-        formData.username !== (profile?.username || '');
+      // Check if there are changes
+      const hasChanges = formData.full_name !== (profile?.full_name || '');
 
       if (!hasChanges) {
         toast({
@@ -227,43 +192,22 @@ export default function ProfilePage() {
         return;
       }
 
-      const updateData = {
-        full_name: formData.full_name.trim() || null,
-        username: formData.username.trim() || null
-      };
-
-      console.log('Update data prepared:', updateData);
-
-      const { data, error } = await updateProfile(user.id, updateData);
-
-      if (error) {
-        debugError(error, 'Profile Update Error');
-        
-        // Handle specific error cases
-        let errorMessage = 'Gagal menyimpan profil';
-        
-        if (error.code === '23505') {
-          if (error.details?.includes('username')) {
-            errorMessage = 'Username sudah digunakan oleh pengguna lain';
-          } else if (error.details?.includes('profiles_full_name_key')) {
-            errorMessage = 'Nama lengkap sudah digunakan';
-          } else {
-            errorMessage = 'Data sudah ada dalam sistem (duplicate key)';
-          }
-        } else if (error.code === '42501') {
-          errorMessage = 'Anda tidak memiliki izin untuk mengupdate profil ini';
-        } else if (error.code === 'PGRST116') {
-          errorMessage = 'Profil tidak ditemukan';
-        } else if (error.code === 'PGRST204') {
-          errorMessage = 'Tidak ada perubahan data yang disimpan';
-        } else if (error.message) {
-          errorMessage = error.message;
-        }
-
-        throw new Error(errorMessage);
+      // Update display name in Firebase Auth
+      if (formData.full_name !== user.displayName) {
+        await updateProfile(user, {
+          displayName: formData.full_name.trim()
+        });
       }
 
-      console.log('✅ Profile updated successfully:', data);
+      // Update profile in Firestore
+      const updateData = {
+        full_name: formData.full_name.trim(),
+        updated_at: new Date()
+      };
+
+      await updateDoc(doc(db, 'users', user.uid), updateData);
+
+      console.log('✅ Profile updated successfully');
 
       toast({
         title: 'Berhasil',
@@ -274,7 +218,7 @@ export default function ProfilePage() {
       });
 
       // Reload profile data
-      await loadUserAndProfile();
+      await loadUserProfile(user);
       
     } catch (error) {
       console.error('❌ Error saving profile:', error);
@@ -288,155 +232,6 @@ export default function ProfilePage() {
       });
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleAvatarUpload = async (event) => {
-    try {
-      setUploading(true);
-      setUploadProgress(0);
-      
-      const file = event.target.files[0];
-      if (!file) return;
-
-      // Validasi file
-      const validation = validateImageFile(file);
-      if (!validation.isValid) {
-        toast({
-          title: 'Error',
-          description: validation.error,
-          status: 'error',
-          duration: 3000,
-          isClosable: true,
-        });
-        return;
-      }
-
-      // Reset file input
-      event.target.value = '';
-
-      // Simulasi progress upload
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 90) {
-            clearInterval(progressInterval);
-            return 90;
-          }
-          return prev + 10;
-        });
-      }, 100);
-
-      console.log('🔄 Starting avatar upload...');
-      const { data: uploadData, error: uploadError } = await uploadAvatar(file, user.id);
-
-      clearInterval(progressInterval);
-      setUploadProgress(100);
-
-      if (uploadError) {
-        debugError(uploadError, 'Avatar Upload Error');
-        throw uploadError;
-      }
-
-      console.log('✅ Avatar uploaded successfully:', uploadData);
-
-      // Update profile dengan avatar_url baru
-      const { error: updateError } = await updateProfile(user.id, {
-        avatar_url: uploadData.publicUrl
-      });
-
-      if (updateError) {
-        debugError(updateError, 'Profile Avatar Update Error');
-        throw updateError;
-      }
-
-      toast({
-        title: 'Berhasil',
-        description: 'Foto profil berhasil diupload',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
-
-      // Reload profile data
-      await loadUserAndProfile();
-      
-      // Reset progress
-      setTimeout(() => {
-        setUploadProgress(0);
-        setUploading(false);
-      }, 500);
-
-    } catch (error) {
-      console.error('❌ Error uploading avatar:', error);
-      
-      let errorMessage = 'Gagal mengupload foto profil';
-      if (error.message) {
-        errorMessage = error.message;
-      }
-      
-      toast({
-        title: 'Error',
-        description: errorMessage,
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
-      setUploading(false);
-      setUploadProgress(0);
-    }
-  };
-
-  const handleRemoveAvatar = async () => {
-    try {
-      if (!profile?.avatar_url) return;
-
-      console.log('🔄 Removing avatar...');
-
-      // Hapus file dari storage
-      const { error: deleteError } = await deleteAvatar(profile.avatar_url, user.id);
-      if (deleteError) {
-        debugError(deleteError, 'Avatar Delete Error');
-        // Continue even if delete fails, we still want to update the profile
-      }
-
-      // Update profile dengan menghapus avatar_url
-      const { error: updateError } = await updateProfile(user.id, {
-        avatar_url: null
-      });
-
-      if (updateError) {
-        debugError(updateError, 'Profile Avatar Remove Error');
-        throw updateError;
-      }
-
-      console.log('✅ Avatar removed successfully');
-
-      toast({
-        title: 'Berhasil',
-        description: 'Foto profil berhasil dihapus',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
-
-      // Reload profile data
-      await loadUserAndProfile();
-
-    } catch (error) {
-      console.error('❌ Error removing avatar:', error);
-      
-      let errorMessage = 'Gagal menghapus foto profil';
-      if (error.message) {
-        errorMessage = error.message;
-      }
-      
-      toast({
-        title: 'Error',
-        description: errorMessage,
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
     }
   };
 
@@ -483,7 +278,7 @@ export default function ProfilePage() {
             Profil Saya
           </Heading>
           <Text color="gray.600" fontSize="lg">
-            Kelola informasi profil dan foto akun Anda
+            Kelola informasi profil akun Anda
           </Text>
         </Box>
 
@@ -497,91 +292,19 @@ export default function ProfilePage() {
                 </FormLabel>
                 
                 <VStack spacing={4} align="center">
-                  <Box position="relative">
-                    <Avatar
-                      size="2xl"
-                      name={profile?.full_name || user.email}
-                      src={profile?.avatar_url || ''}
-                      bg="purple.500"
-                      color="white"
-                      border="4px solid"
-                      borderColor="purple.200"
-                      shadow="md"
-                    />
-                    
-                    {/* Upload Progress */}
-                    {uploading && (
-                      <Box position="absolute" top="0" left="0" right="0" bottom="0">
-                        <Progress 
-                          value={uploadProgress} 
-                          size="xs" 
-                          colorScheme="purple"
-                          position="absolute"
-                          top="0"
-                          left="0"
-                          right="0"
-                          borderRadius="full"
-                        />
-                        <Box
-                          position="absolute"
-                          top="0"
-                          left="0"
-                          right="0"
-                          bottom="0"
-                          bg="blackAlpha.500"
-                          borderRadius="full"
-                          display="flex"
-                          alignItems="center"
-                          justifyContent="center"
-                        >
-                          <Text color="white" fontSize="sm" fontWeight="bold">
-                            {uploadProgress}%
-                          </Text>
-                        </Box>
-                      </Box>
-                    )}
-                  </Box>
-
-                  <HStack spacing={3}>
-                    {/* Upload Button */}
-                    <Button
-                      as="label"
-                      htmlFor="avatar-upload"
-                      leftIcon={<Icon as={FiUpload} />}
-                      colorScheme="purple"
-                      variant="solid"
-                      size="md"
-                      cursor="pointer"
-                      isLoading={uploading}
-                      loadingText="Uploading..."
-                    >
-                      Upload Foto
-                      <Input
-                        id="avatar-upload"
-                        type="file"
-                        accept="image/*"
-                        onChange={handleAvatarUpload}
-                        display="none"
-                      />
-                    </Button>
-
-                    {/* Remove Button */}
-                    {profile?.avatar_url && (
-                      <Button
-                        leftIcon={<Icon as={FiX} />}
-                        colorScheme="red"
-                        variant="outline"
-                        size="md"
-                        onClick={handleRemoveAvatar}
-                        isDisabled={uploading}
-                      >
-                        Hapus
-                      </Button>
-                    )}
-                  </HStack>
-
+                  <Avatar
+                    size="2xl"
+                    name={user.displayName || user.email}
+                    src={user.photoURL || ''}
+                    bg="purple.500"
+                    color="white"
+                    border="4px solid"
+                    borderColor="purple.200"
+                    shadow="md"
+                  />
+                  
                   <Text fontSize="sm" color="gray.500" textAlign="center">
-                    Format: JPG, PNG, GIF (maks. 5MB)
+                    Foto profil diambil dari Google Account (jika login dengan Google)
                   </Text>
                 </VStack>
               </Box>
@@ -611,7 +334,8 @@ export default function ProfilePage() {
 
                   {/* Full Name Field */}
                   <FormControl isInvalid={!!formErrors.full_name}>
-                    <FormLabel fontWeight="semibold">
+                    <FormLabel fontWeight="semibold" display="flex" alignItems="center" gap={2}>
+                      <Icon as={FiUser} color="purple.500" />
                       Nama Lengkap
                     </FormLabel>
                     <Input
@@ -624,24 +348,6 @@ export default function ProfilePage() {
                     <FormErrorMessage>{formErrors.full_name}</FormErrorMessage>
                   </FormControl>
 
-                  {/* Username Field */}
-                  <FormControl isInvalid={!!formErrors.username}>
-                    <FormLabel fontWeight="semibold">
-                      Username
-                    </FormLabel>
-                    <Input
-                      name="username"
-                      value={formData.username}
-                      onChange={handleInputChange}
-                      placeholder="Masukkan username"
-                      fontSize="md"
-                    />
-                    <FormErrorMessage>{formErrors.username}</FormErrorMessage>
-                    <Text fontSize="sm" color="gray.500" mt={1}>
-                      Username akan digunakan sebagai identitas unik Anda
-                    </Text>
-                  </FormControl>
-
                   {/* User Info */}
                   <Box p={4} bg="purple.50" borderRadius="lg" border="1px" borderColor="purple.200">
                     <Text fontSize="md" fontWeight="semibold" color="purple.700" mb={3}>
@@ -651,20 +357,20 @@ export default function ProfilePage() {
                       <Flex justify="space-between" align="center">
                         <Text fontSize="sm" color="purple.600">User ID:</Text>
                         <Badge colorScheme="purple" fontSize="xs" fontFamily="mono" px={2} py={1}>
-                          {user.id.substring(0, 8)}...
+                          {user.uid.substring(0, 8)}...
                         </Badge>
                       </Flex>
                       <Flex justify="space-between" align="center">
-                        <Text fontSize="sm" color="purple.600">Terakhir Update:</Text>
-                        <Text fontSize="sm" color="purple.700" fontWeight="medium">
-                          {profile?.updated_at ? new Date(profile.updated_at).toLocaleDateString('id-ID', {
-                            day: 'numeric',
-                            month: 'long',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          }) : 'Belum pernah diupdate'}
-                        </Text>
+                        <Text fontSize="sm" color="purple.600">Provider:</Text>
+                        <Badge colorScheme="blue" fontSize="xs">
+                          {user.providerData[0]?.providerId || 'Email/Password'}
+                        </Badge>
+                      </Flex>
+                      <Flex justify="space-between" align="center">
+                        <Text fontSize="sm" color="purple.600">Email Verified:</Text>
+                        <Badge colorScheme={user.emailVerified ? 'green' : 'orange'} fontSize="xs">
+                          {user.emailVerified ? 'Terverifikasi' : 'Belum diverifikasi'}
+                        </Badge>
                       </Flex>
                     </VStack>
                   </Box>
@@ -681,7 +387,6 @@ export default function ProfilePage() {
                     fontSize="md"
                     fontWeight="bold"
                     mt={4}
-                    isDisabled={saving || uploading}
                   >
                     Simpan Perubahan
                   </Button>

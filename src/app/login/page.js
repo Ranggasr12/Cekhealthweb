@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from "react";
 import {
   Box,
   Container,
@@ -11,151 +11,277 @@ import {
   FormLabel,
   Input,
   Button,
+  InputGroup,
+  InputRightElement,
+  IconButton,
+  useToast,
+  Card,
+  CardBody,
+  HStack,
+  Link,
   Alert,
   AlertIcon,
-  Link,
-  useToast,
-} from '@chakra-ui/react';
-import { authSignIn } from '@/lib/supabase'; // ✅ GANTI IMPORT INI
-import { useRouter } from 'next/navigation';
+  Spinner,
+} from "@chakra-ui/react";
+import { ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
+import { useRouter } from "next/navigation";
+import { 
+  signInWithEmailAndPassword,
+  onAuthStateChanged 
+} from 'firebase/auth';
+import { auth } from "@/lib/firebase";
 
-export default function Login() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+export default function LoginPage() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
+  const [mounted, setMounted] = useState(false);
+  
   const toast = useToast();
+  const router = useRouter();
+
+  useEffect(() => {
+    setMounted(true);
+    
+    // Check if user is already logged in
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        console.log("✅ User already logged in:", user.email);
+        router.push("/");
+      }
+    });
+    
+    return () => unsubscribe();
+  }, [router]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    
+    if (!email || !password) {
+      toast({
+        title: "Error",
+        description: "Email dan password harus diisi",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
     setLoading(true);
 
     try {
-      console.log("🔐 Login attempt...", { email });
+      console.log("🔄 Attempting login with:", email);
 
-      // ✅ GUNAKAN authSignIn, BUKAN supabase.auth.signInWithPassword
-      const { data, error } = await authSignIn(email.trim(), password.trim());
+      const userCredential = await signInWithEmailAndPassword(
+        auth, 
+        email.trim().toLowerCase(), 
+        password
+      );
 
-      if (error) {
-        console.error("❌ Login error:", error);
-        
-        // Handle specific errors
-        if (error.message.includes("Email not confirmed")) {
-          toast({
-            title: 'Email Belum Diverifikasi',
-            description: 'Silakan cek email Anda untuk verifikasi akun',
-            status: 'error',
-            duration: 5000,
-          });
-          return;
-        }
-        
-        if (error.message.includes("Invalid login credentials")) {
-          toast({
-            title: 'Login Gagal',
-            description: 'Email atau password salah',
-            status: 'error',
-            duration: 5000,
-          });
-          return;
-        }
-        
-        throw error;
-      }
-
-      console.log("✅ Login successful:", data);
-
+      const user = userCredential.user;
+      
+      console.log("✅ Login successful:", user.email);
+      
       toast({
-        title: 'Login Berhasil!',
-        description: 'Selamat datang di CekHealth',
-        status: 'success',
+        title: "Login Berhasil! 🎉",
+        description: `Selamat datang ${user.email}`,
+        status: "success",
         duration: 3000,
+        isClosable: true,
       });
 
-      // Redirect to admin dashboard
-      router.push('/admin');
-      router.refresh();
+      // Redirect to home page
+      setTimeout(() => {
+        router.push("/");
+      }, 1500);
 
     } catch (error) {
-      console.error("❌ Login failed:", error);
+      console.error("❌ Login error:", error.code, error.message);
+      
+      let errorMessage = "Login gagal. Silakan coba lagi.";
+      
+      if (error.code === 'auth/invalid-credential') {
+        errorMessage = "Email atau password salah.";
+      } else if (error.code === 'auth/user-not-found') {
+        errorMessage = "Email tidak terdaftar.";
+      } else if (error.code === 'auth/wrong-password') {
+        errorMessage = "Password salah.";
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = "Terlalu banyak percobaan login. Silakan coba lagi nanti.";
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = "Format email tidak valid.";
+      } else if (error.code === 'auth/operation-not-allowed') {
+        errorMessage = "Login dengan email/password belum diaktifkan. Silakan hubungi administrator.";
+        
+        // Show detailed instructions
+        toast({
+          title: "Setup Required 🔧",
+          description: "Email/Password auth perlu diaktifkan di Firebase Console",
+          status: "warning",
+          duration: 8000,
+          isClosable: true,
+        });
+      } else if (error.code === 'auth/network-request-failed') {
+        errorMessage = "Koneksi internet bermasalah. Silakan cek koneksi Anda.";
+      }
+
       toast({
-        title: 'Login Gagal',
-        description: error.message || 'Terjadi kesalahan saat login',
-        status: 'error',
+        title: "Login Gagal",
+        description: errorMessage,
+        status: "error",
         duration: 5000,
+        isClosable: true,
       });
     } finally {
       setLoading(false);
     }
   };
 
+  // Prevent hydration mismatch
+  if (!mounted) {
+    return (
+      <Box minH="100vh" bg="gray.50" py={10}>
+        <Container maxW="md">
+          <Card>
+            <CardBody>
+              <VStack spacing={4}>
+                <Spinner size="lg" color="purple.500" />
+                <Text>Loading...</Text>
+              </VStack>
+            </CardBody>
+          </Card>
+        </Container>
+      </Box>
+    );
+  }
+
   return (
-    <Container maxW="container.sm" py={10}>
-      <VStack spacing={8}>
-        <Box textAlign="center">
-          <Heading size="xl" color="purple.600" mb={2}>
-            Masuk ke Akun
-          </Heading>
-          <Text color="gray.600">
-            Masuk untuk mengakses dashboard CekHealth
-          </Text>
-        </Box>
-
-        <Box w="100%" maxW="400px">
-          <Alert status="info" mb={4}>
-            <AlertIcon />
-            <Text fontSize="sm">
-              <strong>Demo Login:</strong> Gunakan email: <strong>admin@cekhealth.com</strong> dan password: <strong>admin123</strong>
+    <Box minH="100vh" bg="gray.50" py={10}>
+      <Container maxW="md">
+        <VStack spacing={8}>
+          {/* Header */}
+          <Box textAlign="center">
+            <Heading as="h1" size="xl" color="purple.600" mb={2}>
+              Login
+            </Heading>
+            <Text color="gray.600">
+              Masuk ke akun Anda untuk mengakses layanan kesehatan
             </Text>
-          </Alert>
+          </Box>
 
-          <form onSubmit={handleLogin}>
-            <VStack spacing={4}>
-              <FormControl isRequired>
-                <FormLabel>Email</FormLabel>
-                <Input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="email@example.com"
+          <Card w="full" shadow="md">
+            <CardBody>
+              <VStack as="form" spacing={6} onSubmit={handleLogin}>
+                {/* Demo Accounts Info */}
+                <Alert status="info" borderRadius="md">
+                  <AlertIcon />
+                  <Box>
+                    <Text fontWeight="bold" fontSize="sm">
+                      Test Account
+                    </Text>
+                    <Text fontSize="sm">
+                      Email: admin@cekhealth.com | Password: admin123
+                    </Text>
+                  </Box>
+                </Alert>
+
+                {/* Email Input */}
+                <FormControl isRequired>
+                  <FormLabel>Email</FormLabel>
+                  <Input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="admin@cekhealth.com"
+                    size="lg"
+                    autoComplete="email"
+                  />
+                </FormControl>
+
+                {/* Password Input */}
+                <FormControl isRequired>
+                  <FormLabel>Password</FormLabel>
+                  <InputGroup size="lg">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Masukkan password"
+                      autoComplete="current-password"
+                    />
+                    <InputRightElement>
+                      <IconButton
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                        icon={showPassword ? <ViewOffIcon /> : <ViewIcon />}
+                        variant="ghost"
+                        onClick={() => setShowPassword(!showPassword)}
+                        _hover={{ bg: "transparent" }}
+                      />
+                    </InputRightElement>
+                  </InputGroup>
+                </FormControl>
+
+                {/* Login Button */}
+                <Button
+                  type="submit"
+                  w="full"
                   size="lg"
-                  autoComplete="email"
-                />
-              </FormControl>
+                  colorScheme="purple"
+                  isLoading={loading}
+                  loadingText="Logging in..."
+                  bgGradient="linear(to-r, purple.500, pink.500)"
+                  _hover={{
+                    bgGradient: "linear(to-r, purple.600, pink.600)",
+                    transform: "translateY(-1px)",
+                    boxShadow: "lg"
+                  }}
+                  transition="all 0.2s"
+                >
+                  Login
+                </Button>
 
-              <FormControl isRequired>
-                <FormLabel>Password</FormLabel>
-                <Input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Masukkan password"
-                  size="lg"
-                  autoComplete="current-password"
-                />
-              </FormControl>
+                {/* Register Link */}
+                <HStack justify="center" spacing={1}>
+                  <Text color="gray.600">Belum punya akun?</Text>
+                  <Link 
+                    href="/register" 
+                    color="purple.500"
+                    fontWeight="medium"
+                    _hover={{ color: "purple.600", textDecoration: "underline" }}
+                  >
+                    Daftar di sini
+                  </Link>
+                </HStack>
+              </VStack>
+            </CardBody>
+          </Card>
 
-              <Button
-                type="submit"
-                colorScheme="purple"
-                size="lg"
-                w="100%"
-                isLoading={loading}
-                loadingText="Masuk..."
-              >
-                Masuk
-              </Button>
-            </VStack>
-          </form>
-
-          <Text mt={4} textAlign="center">
-            Belum punya akun?{' '}
-            <Link href="/register" color="purple.500" fontWeight="bold">
-              Daftar di sini
-            </Link>
-          </Text>
-        </Box>
-      </VStack>
-    </Container>
+          {/* Setup Instructions - Show if auth not enabled */}
+          <Card w="full" bg="blue.50" borderColor="blue.200">
+            <CardBody>
+              <VStack align="start" spacing={3}>
+                <Heading size="sm" color="blue.800">
+                  Setup Instructions 🔧
+                </Heading>
+                <Text fontSize="sm" color="blue.700">
+                  1. Buka <Link href="https://console.firebase.google.com/" color="blue.600" fontWeight="bold" isExternal>Firebase Console</Link>
+                </Text>
+                <Text fontSize="sm" color="blue.700">
+                  2. Pilih project <strong>cekhealthweb</strong>
+                </Text>
+                <Text fontSize="sm" color="blue.700">
+                  3. Authentication → Sign-in method → Email/Password → <strong>Enable</strong>
+                </Text>
+                <Text fontSize="sm" color="blue.700">
+                  4. Users tab → Add user → Email: admin@cekhealth.com, Password: admin123
+                </Text>
+              </VStack>
+            </CardBody>
+          </Card>
+        </VStack>
+      </Container>
+    </Box>
   );
 }

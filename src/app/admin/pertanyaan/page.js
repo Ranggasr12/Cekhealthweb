@@ -1,548 +1,278 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
-  Grid,
-  GridItem,
-  FormControl,
-  FormLabel,
-  Input,
-  Textarea,
-  Button,
-  Card,
-  CardBody,
+  Container,
   Heading,
-  useToast,
+  Text,
+  VStack,
+  HStack,
   Table,
   Thead,
   Tbody,
   Tr,
   Th,
   Td,
+  Button,
   IconButton,
+  useToast,
+  Card,
+  CardBody,
   Badge,
+  Input,
   Select,
-  VStack,
-  HStack,
-  Text,
-  Alert,
-  AlertIcon,
-  SimpleGrid,
+  FormControl,
+  FormLabel,
+  Textarea,
   Modal,
   ModalOverlay,
   ModalContent,
   ModalHeader,
   ModalBody,
-  ModalFooter,
   ModalCloseButton,
   useDisclosure,
-  NumberInput,
-  NumberInputField,
-  NumberInputStepper,
-  NumberIncrementStepper,
-  NumberDecrementStepper,
-  Switch,
+  AlertDialog,
+  AlertDialogBody,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogContent,
+  AlertDialogOverlay,
   Spinner,
-  InputGroup,
-  InputLeftElement,
+  Flex,
+  SimpleGrid,
+  Alert,
+  AlertIcon,
   Tabs,
   TabList,
   TabPanels,
   Tab,
   TabPanel,
 } from '@chakra-ui/react';
-import { supabase } from '@/lib/supabase';
+import { 
+  FiPlus, 
+  FiEdit, 
+  FiTrash2, 
+  FiSearch,
+  FiRefreshCw,
+  FiFileText,
+  FiMessageSquare
+} from 'react-icons/fi';
+import { 
+  collection, 
+  addDoc, 
+  getDocs, 
+  updateDoc, 
+  deleteDoc, 
+  doc, 
+  query, 
+  orderBy,
+  serverTimestamp 
+} from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import AdminLayout from '@/components/AdminLayout';
-import { FiTrash2, FiHelpCircle, FiPlus, FiX, FiEdit3, FiSearch } from 'react-icons/fi';
 
 export default function PertanyaanManagement() {
   const [pertanyaan, setPertanyaan] = useState([]);
-  const [jenisPenyakit, setJenisPenyakit] = useState([]);
-  const [formData, setFormData] = useState({
-    jenis_penyakit: '',
-    pertanyaan_text: '',
-    tipe_pertanyaan: 'ya_tidak',
-    keyword_jawaban: '',
-    saran: '',
-    indikasi: '',
-    tingkat_keparahan: 'rendah',
-    score: 1,
-    is_positive_indicator: true
-  });
-  const [newPenyakit, setNewPenyakit] = useState('');
-  const [penyakitForm, setPenyakitForm] = useState({
-    min_nilai: 0,
-    max_nilai: 100
-  });
-  const [loading, setLoading] = useState(false);
+  const [filteredPertanyaan, setFilteredPertanyaan] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [loadingPenyakit, setLoadingPenyakit] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterPenyakit, setFilterPenyakit] = useState('');
+  const [filterJenis, setFilterJenis] = useState('');
   const [filterTipe, setFilterTipe] = useState('');
-  const [dbInitialized, setDbInitialized] = useState(false);
-  const [tablesStatus, setTablesStatus] = useState({
-    pertanyaan: false,
-    penyakit_config: false
+
+  // Form state - DIPERLUAS dengan field baru
+  const [formData, setFormData] = useState({
+    pertanyaan_text: '',
+    jenis_penyakit: '',
+    tipe_pertanyaan: 'ya_tidak',
+    score: 1,
+    // Field untuk essay
+    keyword_jawaban: '',
+    // Informasi tambahan
+    indikasi: '',
+    saran: '',
+    penanganan: '',
+    rekomendasi: ''
   });
-  const [initialized, setInitialized] = useState(false);
+
+  // Modal states
+  const { isOpen: isModalOpen, onOpen: onModalOpen, onClose: onModalClose } = useDisclosure();
+  const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
   
-  // Modals
-  const { isOpen, onOpen, onClose } = useDisclosure();
-  const { isOpen: isEditOpen, onOpen: onEditOpen, onClose: onEditClose } = useDisclosure();
-  
-  const [editingPertanyaan, setEditingPertanyaan] = useState(null);
+  const cancelRef = useRef();
+  const [editingId, setEditingId] = useState(null);
+  const [deleteId, setDeleteId] = useState(null);
+
   const toast = useToast();
 
-  const tingkatKeparahanOptions = [
-    { value: 'rendah', label: 'Rendah', color: 'green', score: 1 },
-    { value: 'sedang', label: 'Sedang', color: 'orange', score: 2 },
-    { value: 'tinggi', label: 'Tinggi', color: 'red', score: 3 }
-  ];
-
-  const tipePertanyaanOptions = [
-    { value: 'ya_tidak', label: 'Ya/Tidak' },
-    { value: 'essay', label: 'Essay' }
-  ];
-
-  // Helper function untuk data default penyakit
-  const getDefaultPenyakit = () => [
-    { id: '1', nama_penyakit: 'Diabetes', min_nilai: 1, max_nilai: 11 },
-    { id: '2', nama_penyakit: 'Hipertensi', min_nilai: 1, max_nilai: 15 },
-    { id: '3', nama_penyakit: 'Jantung', min_nilai: 0, max_nilai: 25 },
-    { id: '4', nama_penyakit: 'Kolesterol', min_nilai: 0, max_nilai: 18 },
-    { id: '5', nama_penyakit: 'Asma', min_nilai: 0, max_nilai: 20 },
-    { id: '6', nama_penyakit: 'Gastrointestinal', min_nilai: 0, max_nilai: 15 }
-  ];
-
-  // Helper function untuk data default pertanyaan
-  const getDefaultPertanyaan = () => [
-    {
-      id: '1',
-      jenis_penyakit: 'Diabetes',
-      pertanyaan_text: 'Apakah Anda sering merasa haus dan buang air kecil?',
-      tipe_pertanyaan: 'ya_tidak',
-      keyword_jawaban: '',
-      saran: 'Perbanyak minum air putih dan konsultasi dengan dokter',
-      indikasi: 'Gejala diabetes tipe 2',
-      tingkat_keparahan: 'sedang',
-      score: 2,
-      is_positive_indicator: true
-    }
-  ];
-
-  // Fungsi untuk mengecek status tabel di database
-  const checkTablesExistence = async () => {
-    try {
-      console.log('🔄 Checking database tables...');
-      
-      // Cek tabel pertanyaan
-      const { error: pertanyaanError } = await supabase
-        .from('pertanyaan')
-        .select('id')
-        .limit(1);
-
-      // Cek tabel penyakit_config
-      const { error: penyakitError } = await supabase
-        .from('penyakit_config')
-        .select('id')
-        .limit(1);
-
-      const pertanyaanExists = !pertanyaanError;
-      const penyakitConfigExists = !penyakitError;
-
-      setTablesStatus({
-        pertanyaan: pertanyaanExists,
-        penyakit_config: penyakitConfigExists
-      });
-
-      console.log('📊 Tables status:', { pertanyaanExists, penyakitConfigExists });
-
-      return { pertanyaanExists, penyakitConfigExists };
-    } catch (error) {
-      console.error('❌ Error checking tables:', error);
-      return { pertanyaanExists: false, penyakitConfigExists: false };
-    }
-  };
-
-  // Fetch data pertanyaan dengan error handling yang lebih baik
-  const fetchPertanyaan = async () => {
+  // Fetch data dari Firestore
+  const fetchPertanyaan = useCallback(async () => {
     setLoading(true);
     try {
-      console.log('🔄 Fetching pertanyaan dari database...');
+      console.log('🔄 Fetching pertanyaan from Firestore...');
       
-      const { data, error } = await supabase
-        .from('pertanyaan')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const q = query(
+        collection(db, 'pertanyaan'), 
+        orderBy('created_at', 'desc')
+      );
       
-      if (error) {
-        console.warn('⚠️ Error fetch pertanyaan:', error);
-        
-        // Jika tabel tidak ada, gunakan data statis
-        if (error.code === '42P01' || error.message?.includes('does not exist')) {
-          console.log('ℹ️ Tabel pertanyaan belum tersedia, menggunakan data statis');
-          setPertanyaan(getDefaultPertanyaan());
-          setTablesStatus(prev => ({ ...prev, pertanyaan: false }));
-          return;
-        }
-        
-        throw error;
-      }
-      
-      console.log('✅ Pertanyaan berhasil difetch:', data?.length || 0, 'data');
-      setPertanyaan(data || []);
-      setTablesStatus(prev => ({ ...prev, pertanyaan: true }));
+      const querySnapshot = await getDocs(q);
+      const pertanyaanData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      console.log('✅ Pertanyaan loaded:', pertanyaanData.length);
+      setPertanyaan(pertanyaanData);
+      setFilteredPertanyaan(pertanyaanData);
       
     } catch (error) {
       console.error('❌ Error fetching pertanyaan:', error);
-      // Fallback ke data statis
-      setPertanyaan(getDefaultPertanyaan());
       toast({
-        title: 'Menggunakan Data Sementara',
-        description: 'Tabel pertanyaan belum tersedia, menggunakan data statis',
-        status: 'warning',
-        duration: 4000,
+        title: 'Error',
+        description: 'Gagal memuat data pertanyaan: ' + error.message,
+        status: 'error',
+        duration: 5000,
         isClosable: true,
       });
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
-  // Fetch data penyakit dengan error handling yang lebih baik
-  const fetchJenisPenyakit = async () => {
-    setLoadingPenyakit(true);
-    try {
-      console.log('🔄 Fetching jenis penyakit dari database...');
-      
-      const { data, error } = await supabase
-        .from('penyakit_config')
-        .select('*')
-        .order('nama_penyakit', { ascending: true });
-      
-      if (error) {
-        console.warn('⚠️ Error fetch penyakit:', error);
-        
-        // Jika tabel tidak ada, gunakan data statis
-        if (error.code === '42P01' || error.message?.includes('does not exist')) {
-          console.log('ℹ️ Tabel penyakit_config belum tersedia, menggunakan data statis');
-          const defaultPenyakit = getDefaultPenyakit();
-          setJenisPenyakit(defaultPenyakit);
-          setDbInitialized(false);
-          setTablesStatus(prev => ({ ...prev, penyakit_config: false }));
-          return;
-        }
-        
-        throw error;
-      }
-      
-      console.log('✅ Jenis penyakit berhasil difetch:', data?.length || 0, 'data');
-      
-      if (data && data.length > 0) {
-        setJenisPenyakit(data);
-        setDbInitialized(true);
-        setTablesStatus(prev => ({ ...prev, penyakit_config: true }));
-      } else {
-        console.log('ℹ️ Tabel penyakit_config kosong, menggunakan data statis');
-        const defaultPenyakit = getDefaultPenyakit();
-        setJenisPenyakit(defaultPenyakit);
-        setDbInitialized(false);
-      }
-    } catch (error) {
-      console.error('❌ Error fetching jenis penyakit:', error);
-      // Fallback ke data statis
-      const defaultPenyakit = getDefaultPenyakit();
-      setJenisPenyakit(defaultPenyakit);
-      setDbInitialized(false);
-    } finally {
-      setLoadingPenyakit(false);
-    }
-  };
-
-  // Initialize data saat component mount - DIUBAH: Fix logic
   useEffect(() => {
-    console.log('🎯 Initializing Pertanyaan Management...');
-    
-    if (initialized) return;
+    fetchPertanyaan();
+  }, [fetchPertanyaan]);
 
-    const initializeData = async () => {
-      try {
-        // Cek status tabel terlebih dahulu
-        const tablesStatus = await checkTablesExistence();
-        
-        console.log('📊 Initial tables status:', tablesStatus);
-
-        // PERBAIKAN: Gunakan data dari database jika tabel ada
-        if (tablesStatus.pertanyaan) {
-          console.log('✅ Tabel pertanyaan ada, fetching dari database');
-          await fetchPertanyaan();
-        } else {
-          console.log('❌ Tabel pertanyaan tidak ada, menggunakan data statis');
-          setPertanyaan(getDefaultPertanyaan());
-        }
-
-        if (tablesStatus.penyakit_config) {
-          console.log('✅ Tabel penyakit_config ada, fetching dari database');
-          await fetchJenisPenyakit();
-        } else {
-          console.log('❌ Tabel penyakit_config tidak ada, menggunakan data statis');
-          setJenisPenyakit(getDefaultPenyakit());
-        }
-
-        setInitialized(true);
-
-      } catch (error) {
-        console.error('❌ Error in initializeData:', error);
-        // Fallback ke data statis
-        setPertanyaan(getDefaultPertanyaan());
-        setJenisPenyakit(getDefaultPenyakit());
-      }
-    };
-
-    initializeData();
-  }, [initialized]); // Hanya jalankan sekali
-
-  // Auto-update score ketika tingkat keparahan berubah
+  // Filter data
   useEffect(() => {
-    const tingkat = tingkatKeparahanOptions.find(t => t.value === formData.tingkat_keparahan);
-    if (tingkat) {
-      setFormData(prev => ({ ...prev, score: tingkat.score }));
-    }
-  }, [formData.tingkat_keparahan]);
+    let filtered = pertanyaan;
 
-  // Filter pertanyaan
-  const filteredPertanyaan = pertanyaan.filter(item => {
-    const matchesSearch = item.pertanyaan_text.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.saran?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.indikasi?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesPenyakit = filterPenyakit ? item.jenis_penyakit === filterPenyakit : true;
-    const matchesTipe = filterTipe ? item.tipe_pertanyaan === filterTipe : true;
-    
-    return matchesSearch && matchesPenyakit && matchesTipe;
-  });
-
-  // Tambah penyakit baru - DIUBAH: Perbaiki logic
-  const handleAddPenyakit = async () => {
-    if (!newPenyakit.trim()) {
-      toast({
-        title: 'Error',
-        description: 'Nama penyakit tidak boleh kosong',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
-      return;
+    if (searchTerm) {
+      filtered = filtered.filter(item =>
+        item.pertanyaan_text.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.jenis_penyakit.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (item.keyword_jawaban && item.keyword_jawaban.toLowerCase().includes(searchTerm.toLowerCase()))
+      );
     }
 
-    // Validasi nama penyakit unik
-    const isDuplicate = jenisPenyakit.some(
-      p => p.nama_penyakit.toLowerCase() === newPenyakit.trim().toLowerCase()
-    );
-    
-    if (isDuplicate) {
-      toast({
-        title: 'Error',
-        description: 'Jenis penyakit sudah ada',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
-      return;
+    if (filterJenis) {
+      filtered = filtered.filter(item => item.jenis_penyakit === filterJenis);
     }
 
-    // Validasi rentang nilai
-    const min = parseInt(penyakitForm.min_nilai) || 0;
-    const max = parseInt(penyakitForm.max_nilai) || 100;
-    
-    if (min < 0) {
-      toast({
-        title: 'Error',
-        description: 'Nilai minimum tidak boleh kurang dari 0',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
-      return;
-    }
-    
-    if (max <= min) {
-      toast({
-        title: 'Error',
-        description: 'Nilai maksimum harus lebih besar dari nilai minimum',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
-      return;
+    if (filterTipe) {
+      filtered = filtered.filter(item => item.tipe_pertanyaan === filterTipe);
     }
 
-    try {
-      console.log('🔄 Menambahkan penyakit baru:', newPenyakit);
-      
-      const newPenyakitData = {
-        nama_penyakit: newPenyakit.trim(),
-        min_nilai: min,
-        max_nilai: max
-      };
+    setFilteredPertanyaan(filtered);
+  }, [pertanyaan, searchTerm, filterJenis, filterTipe]);
 
-      // Jika tabel ada, simpan ke database
-      if (tablesStatus.penyakit_config) {
-        const { data, error } = await supabase
-          .from('penyakit_config')
-          .insert([newPenyakitData])
-          .select();
-
-        if (error) {
-          if (error.code === '23505') {
-            throw new Error('Jenis penyakit sudah ada');
-          }
-          throw error;
-        }
-
-        toast({
-          title: 'Berhasil',
-          description: `Penyakit "${newPenyakit}" berhasil ditambahkan`,
-          status: 'success',
-          duration: 3000,
-          isClosable: true,
-        });
-
-        // Refresh dari database
-        await fetchJenisPenyakit();
-      } else {
-        // Jika tabel belum ada, tambahkan ke state saja
-        const newId = (jenisPenyakit.length + 1).toString();
-        const newPenyakitItem = {
-          id: newId,
-          ...newPenyakitData
-        };
-        
-        setJenisPenyakit(prev => [...prev, newPenyakitItem]);
-        
-        toast({
-          title: 'Berhasil (Data Sementara)',
-          description: `Penyakit "${newPenyakit}" berhasil ditambahkan (data sementara)`,
-          status: 'success',
-          duration: 3000,
-          isClosable: true,
-        });
-      }
-
-      setNewPenyakit('');
-      setPenyakitForm({ min_nilai: 0, max_nilai: 100 });
-      onClose();
-      
-    } catch (error) {
-      console.error('❌ Error adding penyakit:', error);
-      toast({
-        title: 'Error',
-        description: error.message || 'Gagal menambahkan penyakit',
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
-    }
+  // Handle form input changes
+  const handleInputChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : 
+              type === 'number' ? parseInt(value) || 0 : value
+    }));
   };
 
-  // Tambah pertanyaan - DIUBAH: Perbaiki logic dan error handling
+  // Reset form
+  const resetForm = () => {
+    setFormData({
+      pertanyaan_text: '',
+      jenis_penyakit: '',
+      tipe_pertanyaan: 'ya_tidak',
+      score: 1,
+      keyword_jawaban: '',
+      indikasi: '',
+      saran: '',
+      penanganan: '',
+      rekomendasi: ''
+    });
+    setEditingId(null);
+  };
+
+  // Handle form submit (create/update)
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!formData.pertanyaan_text.trim() || !formData.jenis_penyakit.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Pertanyaan dan jenis penyakit harus diisi',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    // Validasi untuk essay questions
+    if (formData.tipe_pertanyaan === 'essay' && !formData.keyword_jawaban.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Keyword jawaban harus diisi untuk pertanyaan essay',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
     setSubmitting(true);
 
     try {
-      if (!formData.pertanyaan_text.trim()) {
-        throw new Error('Pertanyaan tidak boleh kosong');
-      }
-
-      if (!formData.jenis_penyakit) {
-        throw new Error('Jenis penyakit harus dipilih');
-      }
-
-      // Validasi untuk pertanyaan essay harus ada keyword
-      if (formData.tipe_pertanyaan === 'essay' && !formData.keyword_jawaban.trim()) {
-        throw new Error('Pertanyaan essay harus memiliki keyword jawaban');
-      }
-
-      const finalScore = formData.is_positive_indicator ? formData.score : -formData.score;
-
-      console.log('🔄 Menambahkan pertanyaan baru...');
-
-      const newPertanyaanData = {
-        jenis_penyakit: formData.jenis_penyakit,
+      const pertanyaanData = {
+        ...formData,
         pertanyaan_text: formData.pertanyaan_text.trim(),
-        tipe_pertanyaan: formData.tipe_pertanyaan,
-        keyword_jawaban: formData.tipe_pertanyaan === 'essay' ? formData.keyword_jawaban.trim() : null,
-        saran: formData.saran.trim(),
+        jenis_penyakit: formData.jenis_penyakit.trim(),
+        keyword_jawaban: formData.keyword_jawaban.trim(),
         indikasi: formData.indikasi.trim(),
-        tingkat_keparahan: formData.tingkat_keparahan,
-        score: finalScore,
-        is_positive_indicator: formData.is_positive_indicator
+        saran: formData.saran.trim(),
+        penanganan: formData.penanganan.trim(),
+        rekomendasi: formData.rekomendasi.trim(),
+        updated_at: serverTimestamp()
       };
 
-      console.log('📦 Data yang akan disimpan:', newPertanyaanData);
-
-      // Jika tabel ada, simpan ke database
-      if (tablesStatus.pertanyaan) {
-        const { data, error } = await supabase
-          .from('pertanyaan')
-          .insert([newPertanyaanData])
-          .select();
-
-        if (error) {
-          console.error('❌ Database error:', error);
-          throw new Error(`Gagal menyimpan ke database: ${error.message}`);
-        }
-
-        console.log('✅ Data berhasil disimpan:', data);
-
+      if (editingId) {
+        // Update existing document
+        await updateDoc(doc(db, 'pertanyaan', editingId), pertanyaanData);
+        console.log('✅ Pertanyaan updated:', editingId);
+        
         toast({
-          title: 'Pertanyaan berhasil ditambahkan!',
+          title: 'Berhasil',
+          description: 'Pertanyaan berhasil diperbarui',
           status: 'success',
           duration: 3000,
           isClosable: true,
         });
-
-        // Refresh dari database
-        await fetchPertanyaan();
       } else {
-        // Jika tabel belum ada, tambahkan ke state saja
-        const newId = (pertanyaan.length + 1).toString();
-        const newPertanyaanItem = {
-          id: newId,
-          ...newPertanyaanData,
-          created_at: new Date().toISOString()
-        };
-
-        setPertanyaan(prev => [newPertanyaanItem, ...prev]);
-
+        // Create new document
+        pertanyaanData.created_at = serverTimestamp();
+        await addDoc(collection(db, 'pertanyaan'), pertanyaanData);
+        console.log('✅ Pertanyaan created');
+        
         toast({
-          title: 'Pertanyaan berhasil ditambahkan! (Data Sementara)',
+          title: 'Berhasil',
+          description: 'Pertanyaan berhasil ditambahkan',
           status: 'success',
           duration: 3000,
           isClosable: true,
         });
       }
 
-      // Reset form
-      setFormData({
-        jenis_penyakit: '',
-        pertanyaan_text: '',
-        tipe_pertanyaan: 'ya_tidak',
-        keyword_jawaban: '',
-        saran: '',
-        indikasi: '',
-        tingkat_keparahan: 'rendah',
-        score: 1,
-        is_positive_indicator: true
-      });
-
+      // Refresh data dan reset form
+      fetchPertanyaan();
+      resetForm();
+      onModalClose();
+      
     } catch (error) {
-      console.error('❌ Error adding pertanyaan:', error);
+      console.error('❌ Error saving pertanyaan:', error);
       toast({
         title: 'Error',
-        description: error.message,
+        description: 'Gagal menyimpan pertanyaan: ' + error.message,
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -552,1041 +282,522 @@ export default function PertanyaanManagement() {
     }
   };
 
-  // Edit pertanyaan
-  const handleEditPertanyaan = (pertanyaanItem) => {
-    setEditingPertanyaan(pertanyaanItem);
+  // Handle edit
+  const handleEdit = (item) => {
     setFormData({
-      jenis_penyakit: pertanyaanItem.jenis_penyakit,
-      pertanyaan_text: pertanyaanItem.pertanyaan_text,
-      tipe_pertanyaan: pertanyaanItem.tipe_pertanyaan || 'ya_tidak',
-      keyword_jawaban: pertanyaanItem.keyword_jawaban || '',
-      saran: pertanyaanItem.saran || '',
-      indikasi: pertanyaanItem.indikasi || '',
-      tingkat_keparahan: pertanyaanItem.tingkat_keparahan,
-      score: Math.abs(pertanyaanItem.score),
-      is_positive_indicator: pertanyaanItem.score > 0
+      pertanyaan_text: item.pertanyaan_text || '',
+      jenis_penyakit: item.jenis_penyakit || '',
+      tipe_pertanyaan: item.tipe_pertanyaan || 'ya_tidak',
+      score: item.score || 1,
+      keyword_jawaban: item.keyword_jawaban || '',
+      indikasi: item.indikasi || '',
+      saran: item.saran || '',
+      penanganan: item.penanganan || '',
+      rekomendasi: item.rekomendasi || ''
     });
-    onEditOpen();
+    setEditingId(item.id);
+    onModalOpen();
   };
 
-  // Update pertanyaan - DIUBAH: Perbaiki logic
-  const handleUpdatePertanyaan = async (e) => {
-    e.preventDefault();
-    setSubmitting(true);
+  // Handle delete confirmation
+  const handleDeleteClick = (id) => {
+    setDeleteId(id);
+    onDeleteOpen();
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteId) return;
 
     try {
-      const finalScore = formData.is_positive_indicator ? formData.score : -formData.score;
-
-      const updatedData = {
-        jenis_penyakit: formData.jenis_penyakit,
-        pertanyaan_text: formData.pertanyaan_text.trim(),
-        tipe_pertanyaan: formData.tipe_pertanyaan,
-        keyword_jawaban: formData.tipe_pertanyaan === 'essay' ? formData.keyword_jawaban.trim() : null,
-        saran: formData.saran.trim(),
-        indikasi: formData.indikasi.trim(),
-        tingkat_keparahan: formData.tingkat_keparahan,
-        score: finalScore,
-        is_positive_indicator: formData.is_positive_indicator,
-        updated_at: new Date().toISOString()
-      };
-
-      console.log('🔄 Updating pertanyaan:', editingPertanyaan.id, updatedData);
-
-      // Jika tabel ada, update di database
-      if (tablesStatus.pertanyaan) {
-        const { error } = await supabase
-          .from('pertanyaan')
-          .update(updatedData)
-          .eq('id', editingPertanyaan.id);
-
-        if (error) {
-          console.error('❌ Update error:', error);
-          throw new Error(`Gagal update: ${error.message}`);
-        }
-
-        toast({
-          title: 'Pertanyaan berhasil diupdate!',
-          status: 'success',
-          duration: 3000,
-          isClosable: true,
-        });
-
-        await fetchPertanyaan();
-      } else {
-        // Jika tabel belum ada, update di state saja
-        setPertanyaan(prev => 
-          prev.map(item => 
-            item.id === editingPertanyaan.id 
-              ? { 
-                  ...item, 
-                  ...updatedData
-                } 
-              : item
-          )
-        );
-
-        toast({
-          title: 'Pertanyaan berhasil diupdate! (Data Sementara)',
-          status: 'success',
-          duration: 3000,
-          isClosable: true,
-        });
-      }
-
-      onEditClose();
-      setEditingPertanyaan(null);
-      setFormData({
-        jenis_penyakit: '',
-        pertanyaan_text: '',
-        tipe_pertanyaan: 'ya_tidak',
-        keyword_jawaban: '',
-        saran: '',
-        indikasi: '',
-        tingkat_keparahan: 'rendah',
-        score: 1,
-        is_positive_indicator: true
-      });
-
-    } catch (error) {
-      console.error('Error updating pertanyaan:', error);
+      await deleteDoc(doc(db, 'pertanyaan', deleteId));
+      console.log('✅ Pertanyaan deleted:', deleteId);
+      
       toast({
-        title: 'Error',
-        description: error.message,
-        status: 'error',
-        duration: 5000,
+        title: 'Berhasil',
+        description: 'Pertanyaan berhasil dihapus',
+        status: 'success',
+        duration: 3000,
         isClosable: true,
       });
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
-  // Hapus pertanyaan - DIUBAH: Perbaiki ID handling
-  const handleDelete = async (id) => {
-    if (!confirm('Apakah Anda yakin ingin menghapus pertanyaan ini?')) return;
-
-    try {
-      console.log('🔄 Deleting pertanyaan dengan ID:', id);
-
-      // Jika tabel ada, hapus dari database
-      if (tablesStatus.pertanyaan) {
-        // Pastikan ID adalah number (database ID) bukan string ID dari data statis
-        const numericId = typeof id === 'string' && id.startsWith('temp-') ? null : parseInt(id);
-        
-        if (!numericId || isNaN(numericId)) {
-          throw new Error('ID tidak valid untuk operasi database');
-        }
-
-        const { error } = await supabase
-          .from('pertanyaan')
-          .delete()
-          .eq('id', numericId);
-
-        if (error) {
-          console.error('❌ Delete error:', error);
-          throw new Error(`Gagal menghapus: ${error.message}`);
-        }
-
-        toast({
-          title: 'Pertanyaan berhasil dihapus!',
-          status: 'success',
-          duration: 3000,
-          isClosable: true,
-        });
-
-        await fetchPertanyaan();
-      } else {
-        // Jika tabel belum ada, hapus dari state saja
-        setPertanyaan(prev => prev.filter(item => item.id !== id));
-        
-        toast({
-          title: 'Pertanyaan berhasil dihapus! (Data Sementara)',
-          status: 'success',
-          duration: 3000,
-          isClosable: true,
-        });
-      }
-
+      fetchPertanyaan();
+      
     } catch (error) {
       console.error('❌ Error deleting pertanyaan:', error);
       toast({
         title: 'Error',
-        description: error.message || 'Gagal menghapus pertanyaan',
+        description: 'Gagal menghapus pertanyaan: ' + error.message,
         status: 'error',
         duration: 5000,
         isClosable: true,
       });
-    }
-  };
-
-  // Hapus penyakit dengan validasi
-  const handleDeletePenyakit = async (id, namaPenyakit) => {
-    const pertanyaanTerpakai = pertanyaan.filter(p => p.jenis_penyakit === namaPenyakit);
-    
-    if (pertanyaanTerpakai.length > 0) {
-      toast({
-        title: 'Tidak dapat menghapus',
-        description: `Terdapat ${pertanyaanTerpakai.length} pertanyaan yang menggunakan penyakit "${namaPenyakit}". Hapus pertanyaan tersebut terlebih dahulu.`,
-        status: 'error',
-        duration: 6000,
-        isClosable: true,
-      });
-      return;
-    }
-
-    if (!confirm(`Apakah Anda yakin ingin menghapus penyakit "${namaPenyakit}"?`)) return;
-
-    try {
-      // Jika tabel ada, hapus dari database
-      if (tablesStatus.penyakit_config) {
-        const { error } = await supabase
-          .from('penyakit_config')
-          .delete()
-          .eq('id', id);
-
-        if (error) throw error;
-
-        toast({
-          title: 'Berhasil',
-          description: `Penyakit "${namaPenyakit}" berhasil dihapus`,
-          status: 'success',
-          duration: 3000,
-          isClosable: true,
-        });
-
-        await fetchJenisPenyakit();
-      } else {
-        // Jika tabel belum ada, hapus dari state saja
-        setJenisPenyakit(prev => prev.filter(item => item.id !== id));
-        
-        toast({
-          title: 'Berhasil (Data Sementara)',
-          description: `Penyakit "${namaPenyakit}" berhasil dihapus (data sementara)`,
-          status: 'success',
-          duration: 3000,
-          isClosable: true,
-        });
-      }
-
-      // Reset form jika penyakit yang dihapus sedang dipilih
-      if (formData.jenis_penyakit === namaPenyakit) {
-        setFormData(prev => ({ ...prev, jenis_penyakit: '' }));
-      }
-    } catch (error) {
-      console.error('Error deleting penyakit:', error);
-      toast({
-        title: 'Error',
-        description: error.message || 'Gagal menghapus penyakit',
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
-    }
-  };
-
-  const getTingkatKeparahanColor = (tingkat) => {
-    const found = tingkatKeparahanOptions.find(opt => opt.value === tingkat);
-    return found ? found.color : 'gray';
-  };
-
-  const getTingkatKeparahanLabel = (tingkat) => {
-    const found = tingkatKeparahanOptions.find(opt => opt.value === tingkat);
-    return found ? found.label : 'Tidak Diketahui';
-  };
-
-  const getTipePertanyaanLabel = (tipe) => {
-    const found = tipePertanyaanOptions.find(opt => opt.value === tipe);
-    return found ? found.label : 'Tidak Diketahui';
-  };
-
-  // Hitung statistik
-  const calculateStats = () => {
-    const stats = {
-      total: pertanyaan.length,
-      ya_tidak: pertanyaan.filter(p => p.tipe_pertanyaan === 'ya_tidak').length,
-      essay: pertanyaan.filter(p => p.tipe_pertanyaan === 'essay').length,
-      byPenyakit: {}
-    };
-
-    jenisPenyakit.forEach(penyakit => {
-      stats.byPenyakit[penyakit.nama_penyakit] = pertanyaan.filter(p => p.jenis_penyakit === penyakit.nama_penyakit).length;
-    });
-
-    return stats;
-  };
-
-  const stats = calculateStats();
-
-  // Fungsi untuk refresh data
-  const handleRefreshData = async () => {
-    setLoading(true);
-    try {
-      await Promise.all([
-        checkTablesExistence(),
-        fetchPertanyaan(),
-        fetchJenisPenyakit()
-      ]);
-      
-      toast({
-        title: 'Data Diperbarui',
-        description: 'Data pertanyaan dan penyakit telah diperbarui',
-        status: 'info',
-        duration: 3000,
-      });
-    } catch (error) {
-      console.error('Error refreshing data:', error);
     } finally {
-      setLoading(false);
+      onDeleteClose();
+      setDeleteId(null);
     }
   };
 
-  // ... (rest of the JSX remains the same, just use the fixed functions above)
+  // Get unique values untuk filter
+  const uniquePenyakit = [...new Set(pertanyaan.map(item => item.jenis_penyakit))].filter(Boolean);
+  const uniqueTipe = [...new Set(pertanyaan.map(item => item.tipe_pertanyaan))].filter(Boolean);
+
+  const formatDate = (timestamp) => {
+    if (!timestamp) return 'N/A';
+    
+    if (timestamp.toDate) {
+      return timestamp.toDate().toLocaleDateString('id-ID');
+    }
+    
+    return new Date(timestamp).toLocaleDateString('id-ID');
+  };
+
+  if (loading) {
+    return (
+      <AdminLayout>
+        <Container maxW="container.xl" py={8}>
+          <VStack spacing={6} align="center" justify="center" minH="400px">
+            <Spinner size="xl" color="purple.500" thickness="3px" />
+            <Text color="gray.600">Memuat data pertanyaan...</Text>
+          </VStack>
+        </Container>
+      </AdminLayout>
+    );
+  }
 
   return (
     <AdminLayout>
-      <Box p={4}>
+      <Container maxW="container.xl" py={8}>
         <VStack spacing={6} align="stretch">
-          {/* Header dengan Refresh Button */}
-          <HStack justify="space-between">
-            <Box>
-              <Heading size="lg" mb={2}>Kelola Pertanyaan Kesehatan</Heading>
-              <Text color="gray.600">Kelola pertanyaan, scoring, dan sistem diagnosa kesehatan</Text>
-            </Box>
-            <Button
-              onClick={handleRefreshData}
-              colorScheme="blue"
-              variant="outline"
-              size="sm"
-              isLoading={loading}
-            >
-              Refresh Data
-            </Button>
-          </HStack>
+          {/* Header */}
+          <Box>
+            <Heading size="lg" mb={2}>Kelola Pertanyaan Kesehatan</Heading>
+            <Text color="gray.600">
+              Kelola pertanyaan untuk sistem diagnosa kesehatan dengan konfigurasi lengkap
+            </Text>
+          </Box>
 
-          {/* Database Status Alert */}
-          {(!tablesStatus.pertanyaan || !tablesStatus.penyakit_config) && (
-            <Alert status="info" borderRadius="md">
-              <AlertIcon />
-              <VStack align="start" spacing={2} width="full">
-                <Text fontSize="sm" fontWeight="bold">ℹ️ Status Database</Text>
-                <Text fontSize="sm">
-                  {!tablesStatus.pertanyaan && !tablesStatus.penyakit_config 
-                    ? 'Menggunakan data statis sementara. Tabel database belum tersedia.'
-                    : !tablesStatus.pertanyaan 
-                    ? 'Menggunakan data statis untuk pertanyaan. Tabel pertanyaan belum tersedia.'
-                    : 'Menggunakan data statis untuk penyakit. Tabel penyakit_config belum tersedia.'
-                  }
-                </Text>
-                <Text fontSize="xs" color="gray.600">
-                  Semua perubahan akan tersimpan sementara di browser.
-                </Text>
-              </VStack>
-            </Alert>
-          )}
-
-          {/* Statistik */}
-          <SimpleGrid columns={{ base: 1, md: 4 }} spacing={4}>
-            <Card>
-              <CardBody textAlign="center">
-                <Text fontSize="2xl" fontWeight="bold" color="blue.600">{stats.total}</Text>
-                <Text color="gray.600">Total Pertanyaan</Text>
-                {!tablesStatus.pertanyaan && (
-                  <Badge colorScheme="yellow" fontSize="xs" mt={1}>Data Sementara</Badge>
-                )}
+          {/* Stats Card */}
+          <SimpleGrid columns={{ base: 1, md: 4 }} spacing={6}>
+            <Card bg="blue.50" border="1px" borderColor="blue.200">
+              <CardBody>
+                <VStack spacing={2}>
+                  <Text color="blue.800" fontSize="2xl" fontWeight="bold">
+                    {pertanyaan.length}
+                  </Text>
+                  <Text color="blue.600" fontSize="sm">Total Pertanyaan</Text>
+                </VStack>
               </CardBody>
             </Card>
-            <Card>
-              <CardBody textAlign="center">
-                <Text fontSize="2xl" fontWeight="bold" color="green.600">{stats.ya_tidak}</Text>
-                <Text color="gray.600">Pertanyaan Ya/Tidak</Text>
+            
+            <Card bg="green.50" border="1px" borderColor="green.200">
+              <CardBody>
+                <VStack spacing={2}>
+                  <Text color="green.800" fontSize="2xl" fontWeight="bold">
+                    {uniquePenyakit.length}
+                  </Text>
+                  <Text color="green.600" fontSize="sm">Jenis Penyakit</Text>
+                </VStack>
               </CardBody>
             </Card>
-            <Card>
-              <CardBody textAlign="center">
-                <Text fontSize="2xl" fontWeight="bold" color="purple.600">{stats.essay}</Text>
-                <Text color="gray.600">Pertanyaan Essay</Text>
+            
+            <Card bg="orange.50" border="1px" borderColor="orange.200">
+              <CardBody>
+                <VStack spacing={2}>
+                  <Text color="orange.800" fontSize="2xl" fontWeight="bold">
+                    {pertanyaan.filter(p => p.tipe_pertanyaan === 'ya_tidak').length}
+                  </Text>
+                  <Text color="orange.600" fontSize="sm">Pertanyaan Ya/Tidak</Text>
+                </VStack>
               </CardBody>
             </Card>
-            <Card>
-              <CardBody textAlign="center">
-                <Text fontSize="2xl" fontWeight="bold" color="orange.600">{jenisPenyakit.length}</Text>
-                <Text color="gray.600">Jenis Penyakit</Text>
-                {!tablesStatus.penyakit_config && (
-                  <Badge colorScheme="yellow" fontSize="xs" mt={1}>Data Sementara</Badge>
-                )}
+            
+            <Card bg="purple.50" border="1px" borderColor="purple.200">
+              <CardBody>
+                <VStack spacing={2}>
+                  <Text color="purple.800" fontSize="2xl" fontWeight="bold">
+                    {pertanyaan.filter(p => p.tipe_pertanyaan === 'essay').length}
+                  </Text>
+                  <Text color="purple.600" fontSize="sm">Pertanyaan Essay</Text>
+                </VStack>
               </CardBody>
             </Card>
           </SimpleGrid>
 
-          {/* Tabs untuk Pertanyaan dan Penyakit */}
-          <Tabs variant="enclosed">
-            <TabList>
-              <Tab>Kelola Pertanyaan</Tab>
-              <Tab>Kelola Penyakit</Tab>
-            </TabList>
-
-            <TabPanels>
-              {/* Panel Pertanyaan */}
-              <TabPanel>
-                <Grid templateColumns={{ base: '1fr', lg: '1fr 1fr' }} gap={6}>
-                  {/* Add Pertanyaan Form */}
-                  <GridItem>
-                    <Card>
-                      <CardBody>
-                        <Heading size="md" mb={4}>
-                          {editingPertanyaan ? 'Edit Pertanyaan' : 'Tambah Pertanyaan Baru'}
-                        </Heading>
-                        <form onSubmit={editingPertanyaan ? handleUpdatePertanyaan : handleSubmit}>
-                          <VStack spacing={4}>
-                            <FormControl isRequired>
-                              <FormLabel>Jenis Penyakit</FormLabel>
-                              <Select
-                                value={formData.jenis_penyakit}
-                                onChange={(e) => setFormData(prev => ({ ...prev, jenis_penyakit: e.target.value }))}
-                                placeholder="Pilih jenis penyakit"
-                              >
-                                {jenisPenyakit.map((penyakit) => (
-                                  <option key={penyakit.id} value={penyakit.nama_penyakit}>
-                                    {penyakit.nama_penyakit}
-                                  </option>
-                                ))}
-                              </Select>
-                            </FormControl>
-
-                            <FormControl isRequired>
-                              <FormLabel>Tipe Pertanyaan</FormLabel>
-                              <Select
-                                value={formData.tipe_pertanyaan}
-                                onChange={(e) => setFormData(prev => ({ ...prev, tipe_pertanyaan: e.target.value }))}
-                              >
-                                {tipePertanyaanOptions.map((tipe) => (
-                                  <option key={tipe.value} value={tipe.value}>
-                                    {tipe.label}
-                                  </option>
-                                ))}
-                              </Select>
-                            </FormControl>
-
-                            <FormControl isRequired>
-                              <FormLabel>Pertanyaan</FormLabel>
-                              <Textarea
-                                value={formData.pertanyaan_text}
-                                onChange={(e) => setFormData(prev => ({ ...prev, pertanyaan_text: e.target.value }))}
-                                placeholder="Teks pertanyaan untuk user"
-                                rows={3}
-                              />
-                            </FormControl>
-
-                            {formData.tipe_pertanyaan === 'essay' && (
-                              <FormControl isRequired>
-                                <FormLabel>Keyword Jawaban</FormLabel>
-                                <Input
-                                  value={formData.keyword_jawaban}
-                                  onChange={(e) => setFormData(prev => ({ ...prev, keyword_jawaban: e.target.value }))}
-                                  placeholder="pisahkan dengan koma, contoh: lemas,lelah,pusing"
-                                />
-                                <Text fontSize="sm" color="gray.500" mt={1}>
-                                  Kata kunci yang dicari dalam jawaban essay (pisahkan dengan koma)
-                                </Text>
-                              </FormControl>
-                            )}
-
-                            <FormControl>
-                              <FormLabel>Tipe Indikator</FormLabel>
-                              <HStack spacing={4}>
-                                <HStack>
-                                  <Switch
-                                    isChecked={formData.is_positive_indicator}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, is_positive_indicator: e.target.checked }))}
-                                    colorScheme="green"
-                                  />
-                                  <Text fontSize="sm">
-                                    {formData.is_positive_indicator ? 'Indikator Positif' : 'Indikator Negatif'}
-                                  </Text>
-                                </HStack>
-                                <Badge colorScheme={formData.is_positive_indicator ? 'green' : 'red'} fontSize="xs">
-                                  {formData.is_positive_indicator ? 'YA menambah score' : 'YA mengurangi score'}
-                                </Badge>
-                              </HStack>
-                            </FormControl>
-
-                            <FormControl isRequired>
-                              <FormLabel>Score</FormLabel>
-                              <NumberInput
-                                value={formData.score}
-                                onChange={(value) => setFormData(prev => ({ ...prev, score: parseInt(value) || 1 }))}
-                                min={1}
-                                max={10}
-                              >
-                                <NumberInputField />
-                                <NumberInputStepper>
-                                  <NumberIncrementStepper />
-                                  <NumberDecrementStepper />
-                                </NumberInputStepper>
-                              </NumberInput>
-                            </FormControl>
-
-                            <FormControl>
-                              <FormLabel>Tingkat Keparahan</FormLabel>
-                              <Select
-                                value={formData.tingkat_keparahan}
-                                onChange={(e) => setFormData(prev => ({ ...prev, tingkat_keparahan: e.target.value }))}
-                              >
-                                {tingkatKeparahanOptions.map((tingkat) => (
-                                  <option key={tingkat.value} value={tingkat.value}>
-                                    {tingkat.label} (Score: {tingkat.score})
-                                  </option>
-                                ))}
-                              </Select>
-                            </FormControl>
-
-                            <FormControl>
-                              <FormLabel>Saran</FormLabel>
-                              <Textarea
-                                value={formData.saran}
-                                onChange={(e) => setFormData(prev => ({ ...prev, saran: e.target.value }))}
-                                placeholder="Saran untuk user berdasarkan jawaban"
-                                rows={2}
-                              />
-                            </FormControl>
-
-                            <FormControl>
-                              <FormLabel>Indikasi</FormLabel>
-                              <Textarea
-                                value={formData.indikasi}
-                                onChange={(e) => setFormData(prev => ({ ...prev, indikasi: e.target.value }))}
-                                placeholder="Indikasi kesehatan (untuk analisis internal)"
-                                rows={2}
-                              />
-                            </FormControl>
-
-                            <Button
-                              type="submit"
-                              colorScheme="blue"
-                              w="full"
-                              isLoading={submitting}
-                              loadingText={editingPertanyaan ? "Mengupdate..." : "Menambahkan..."}
-                              leftIcon={<FiHelpCircle />}
-                            >
-                              {editingPertanyaan ? 'Update Pertanyaan' : 'Tambah Pertanyaan'}
-                              {!tablesStatus.pertanyaan && ' (Sementara)'}
-                            </Button>
-
-                            {editingPertanyaan && (
-                              <Button
-                                w="full"
-                                variant="outline"
-                                onClick={() => {
-                                  onEditClose();
-                                  setEditingPertanyaan(null);
-                                  setFormData({
-                                    jenis_penyakit: '',
-                                    pertanyaan_text: '',
-                                    tipe_pertanyaan: 'ya_tidak',
-                                    keyword_jawaban: '',
-                                    saran: '',
-                                    indikasi: '',
-                                    tingkat_keparahan: 'rendah',
-                                    score: 1,
-                                    is_positive_indicator: true
-                                  });
-                                }}
-                              >
-                                Batal Edit
-                              </Button>
-                            )}
-                          </VStack>
-                        </form>
-                      </CardBody>
-                    </Card>
-                  </GridItem>
-
-                  {/* Pertanyaan List */}
-                  <GridItem>
-                    <Card>
-                      <CardBody>
-                        <Heading size="md" mb={4}>
-                          Daftar Pertanyaan ({filteredPertanyaan.length} dari {pertanyaan.length})
-                          {!tablesStatus.pertanyaan && (
-                            <Badge colorScheme="yellow" ml={2} fontSize="xs">
-                              Data Sementara
-                            </Badge>
-                          )}
-                        </Heading>
-                        
-                        {/* Search and Filter */}
-                        <HStack mb={4} spacing={4}>
-                          <InputGroup>
-                            <InputLeftElement>
-                              <FiSearch color="gray.300" />
-                            </InputLeftElement>
-                            <Input
-                              placeholder="Cari pertanyaan, saran, atau indikasi..."
-                              value={searchTerm}
-                              onChange={(e) => setSearchTerm(e.target.value)}
-                            />
-                          </InputGroup>
-                          <Select
-                            placeholder="Filter penyakit"
-                            value={filterPenyakit}
-                            onChange={(e) => setFilterPenyakit(e.target.value)}
-                            maxW="200px"
-                          >
-                            {jenisPenyakit.map((penyakit) => (
-                              <option key={penyakit.id} value={penyakit.nama_penyakit}>
-                                {penyakit.nama_penyakit}
-                              </option>
-                            ))}
-                          </Select>
-                          <Select
-                            placeholder="Filter tipe"
-                            value={filterTipe}
-                            onChange={(e) => setFilterTipe(e.target.value)}
-                            maxW="150px"
-                          >
-                            <option value="">Semua Tipe</option>
-                            {tipePertanyaanOptions.map((tipe) => (
-                              <option key={tipe.value} value={tipe.value}>
-                                {tipe.label}
-                              </option>
-                            ))}
-                          </Select>
-                        </HStack>
-                        
-                        {loading ? (
-                          <Box textAlign="center" py={8}>
-                            <Spinner size="lg" />
-                            <Text color="gray.500" mt={4}>
-                              Memuat data pertanyaan...
-                            </Text>
-                          </Box>
-                        ) : filteredPertanyaan.length === 0 ? (
-                          <Box textAlign="center" py={8}>
-                            <FiHelpCircle size={48} color="#CBD5E0" />
-                            <Text color="gray.500" mt={4}>
-                              {pertanyaan.length === 0 ? 'Belum ada pertanyaan' : 'Tidak ada pertanyaan yang sesuai dengan filter'}
-                            </Text>
-                            {pertanyaan.length === 0 && (
-                              <Button mt={4} colorScheme="blue" onClick={handleRefreshData}>
-                                Coba Muat Ulang
-                              </Button>
-                            )}
-                          </Box>
-                        ) : (
-                          <Box maxH="600px" overflowY="auto">
-                            <Table variant="simple" size="sm">
-                              <Thead>
-                                <Tr>
-                                  <Th>Penyakit</Th>
-                                  <Th>Pertanyaan</Th>
-                                  <Th>Tipe</Th>
-                                  <Th>Score</Th>
-                                  <Th>Keparahan</Th>
-                                  <Th>Aksi</Th>
-                                </Tr>
-                              </Thead>
-                              <Tbody>
-                                {filteredPertanyaan.map((item) => (
-                                  <Tr key={item.id}>
-                                    <Td>
-                                      <Badge colorScheme="blue" fontSize="xs">
-                                        {item.jenis_penyakit}
-                                      </Badge>
-                                    </Td>
-                                    <Td>
-                                      <VStack align="start" spacing={1}>
-                                        <Text noOfLines={2} maxW="300px" fontSize="sm">
-                                          {item.pertanyaan_text}
-                                        </Text>
-                                        {item.tipe_pertanyaan === 'essay' && item.keyword_jawaban && (
-                                          <Text fontSize="xs" color="gray.500" noOfLines={1}>
-                                            Keyword: {item.keyword_jawaban}
-                                          </Text>
-                                        )}
-                                        {item.saran && (
-                                          <Text fontSize="xs" color="gray.600" noOfLines={1}>
-                                            Saran: {item.saran}
-                                          </Text>
-                                        )}
-                                        <Badge 
-                                          colorScheme={item.score > 0 ? 'green' : 'red'} 
-                                          fontSize="xs"
-                                        >
-                                          {item.score > 0 ? 'Positif' : 'Negatif'}
-                                        </Badge>
-                                      </VStack>
-                                    </Td>
-                                    <Td>
-                                      <Badge 
-                                        colorScheme={item.tipe_pertanyaan === 'essay' ? 'purple' : 'green'}
-                                        fontSize="xs"
-                                      >
-                                        {getTipePertanyaanLabel(item.tipe_pertanyaan)}
-                                      </Badge>
-                                    </Td>
-                                    <Td>
-                                      <Badge 
-                                        colorScheme={item.score > 0 ? 'green' : 'red'}
-                                        fontSize="sm"
-                                      >
-                                        {item.score > 0 ? '+' : ''}{item.score}
-                                      </Badge>
-                                    </Td>
-                                    <Td>
-                                      <Badge 
-                                        colorScheme={getTingkatKeparahanColor(item.tingkat_keparahan)}
-                                        fontSize="xs"
-                                      >
-                                        {getTingkatKeparahanLabel(item.tingkat_keparahan)}
-                                      </Badge>
-                                    </Td>
-                                    <Td>
-                                      <HStack>
-                                        <IconButton
-                                          icon={<FiEdit3 />}
-                                          size="sm"
-                                          colorScheme="blue"
-                                          variant="ghost"
-                                          onClick={() => handleEditPertanyaan(item)}
-                                          aria-label="Edit pertanyaan"
-                                        />
-                                        <IconButton
-                                          icon={<FiTrash2 />}
-                                          size="sm"
-                                          colorScheme="red"
-                                          variant="ghost"
-                                          onClick={() => handleDelete(item.id)}
-                                          aria-label="Delete pertanyaan"
-                                        />
-                                      </HStack>
-                                    </Td>
-                                  </Tr>
-                                ))}
-                              </Tbody>
-                            </Table>
-                          </Box>
-                        )}
-                      </CardBody>
-                    </Card>
-                  </GridItem>
-                </Grid>
-              </TabPanel>
-
-              {/* Panel Penyakit */}
-              <TabPanel>
-                <Card>
-                  <CardBody>
-                    <HStack justify="space-between" mb={4}>
-                      <VStack align="start" spacing={1}>
-                        <Heading size="md">Kelola Jenis Penyakit & Rentang Nilai</Heading>
-                        <Text fontSize="sm" color="gray.600">
-                          {jenisPenyakit.length} penyakit • {pertanyaan.length} pertanyaan
-                          {!tablesStatus.penyakit_config && (
-                            <Badge colorScheme="yellow" ml={2} fontSize="xs">
-                              Data Sementara
-                            </Badge>
-                          )}
-                        </Text>
-                      </VStack>
-                      <Button
-                        leftIcon={<FiPlus />}
-                        colorScheme="green"
-                        size="sm"
-                        onClick={onOpen}
-                      >
-                        Tambah Penyakit
-                      </Button>
-                    </HStack>
-
-                    {loadingPenyakit ? (
-                      <Box textAlign="center" py={4}>
-                        <Spinner size="lg" />
-                        <Text mt={2} color="gray.500">Memuat data penyakit...</Text>
-                      </Box>
-                    ) : jenisPenyakit.length === 0 ? (
-                      <Box textAlign="center" py={4}>
-                        <FiHelpCircle size={48} color="#CBD5E0" />
-                        <Text color="gray.500" mt={2}>Belum ada jenis penyakit</Text>
-                        <Button 
-                          mt={2} 
-                          colorScheme="blue" 
-                          size="sm"
-                          onClick={onOpen}
-                        >
-                          Tambah Penyakit Pertama
-                        </Button>
-                      </Box>
-                    ) : (
-                      <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={4}>
-                        {jenisPenyakit.map((penyakit) => {
-                          const totalPertanyaan = pertanyaan.filter(p => p.jenis_penyakit === penyakit.nama_penyakit).length;
-                          
-                          return (
-                            <Card key={penyakit.id} variant="outline">
-                              <CardBody>
-                                <VStack spacing={3} align="stretch">
-                                  <HStack justify="space-between">
-                                    <Badge colorScheme="blue" fontSize="sm" px={2} py={1}>
-                                      {penyakit.nama_penyakit}
-                                    </Badge>
-                                    <IconButton
-                                      icon={<FiX />}
-                                      size="sm"
-                                      colorScheme="red"
-                                      variant="ghost"
-                                      onClick={() => handleDeletePenyakit(penyakit.id, penyakit.nama_penyakit)}
-                                      aria-label="Hapus penyakit"
-                                    />
-                                  </HStack>
-                                  
-                                  <VStack spacing={2} align="start">
-                                    <HStack spacing={4} width="full">
-                                      <VStack align="start" spacing={0}>
-                                        <Text fontSize="xs" color="gray.500">Rentang Nilai</Text>
-                                        <Text fontSize="sm" fontWeight="bold">
-                                          {penyakit.min_nilai || 0} - {penyakit.max_nilai || 100}
-                                        </Text>
-                                      </VStack>
-                                      <VStack align="start" spacing={0}>
-                                        <Text fontSize="xs" color="gray.500">Pertanyaan</Text>
-                                        <Text fontSize="sm" fontWeight="bold">
-                                          {totalPertanyaan}
-                                        </Text>
-                                      </VStack>
-                                    </HStack>
-                                  </VStack>
-
-                                  <Box>
-                                    <HStack justify="space-between" mb={1}>
-                                      <Text fontSize="xs" color="gray.600">Rentang Diagnosa:</Text>
-                                      <Text fontSize="xs" fontWeight="bold">
-                                        {penyakit.min_nilai || 0} - {penyakit.max_nilai || 100}
-                                      </Text>
-                                    </HStack>
-                                  </Box>
-                                </VStack>
-                              </CardBody>
-                            </Card>
-                          );
-                        })}
-                      </SimpleGrid>
-                    )}
-                  </CardBody>
-                </Card>
-              </TabPanel>
-            </TabPanels>
-          </Tabs>
-        </VStack>
-      </Box>
-
-      {/* Modal Tambah Penyakit */}
-      <Modal isOpen={isOpen} onClose={onClose}>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Tambah Jenis Penyakit Baru</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody>
-            <VStack spacing={4}>
-              <FormControl isRequired>
-                <FormLabel>Nama Penyakit</FormLabel>
-                <Input
-                  value={newPenyakit}
-                  onChange={(e) => setNewPenyakit(e.target.value)}
-                  placeholder="Masukkan nama penyakit baru"
-                />
-              </FormControl>
-
-              <FormControl>
-                <FormLabel>Nilai Minimum</FormLabel>
-                <NumberInput
-                  value={penyakitForm.min_nilai}
-                  onChange={(value) => setPenyakitForm(prev => ({ ...prev, min_nilai: parseInt(value) || 0 }))}
-                  min={0}
-                  max={100}
-                >
-                  <NumberInputField />
-                  <NumberInputStepper>
-                    <NumberIncrementStepper />
-                    <NumberDecrementStepper />
-                  </NumberInputStepper>
-                </NumberInput>
-              </FormControl>
-
-              <FormControl>
-                <FormLabel>Nilai Maksimum</FormLabel>
-                <NumberInput
-                  value={penyakitForm.max_nilai}
-                  onChange={(value) => setPenyakitForm(prev => ({ ...prev, max_nilai: parseInt(value) || 100 }))}
-                  min={1}
-                  max={1000}
-                >
-                  <NumberInputField />
-                  <NumberInputStepper>
-                    <NumberIncrementStepper />
-                    <NumberDecrementStepper />
-                  </NumberInputStepper>
-                </NumberInput>
-              </FormControl>
-            </VStack>
-          </ModalBody>
-          <ModalFooter>
-            <Button variant="ghost" mr={3} onClick={onClose}>
-              Batal
-            </Button>
-            <Button 
-              colorScheme="blue" 
-              onClick={handleAddPenyakit}
-              leftIcon={<FiPlus />}
-            >
-              Tambah Penyakit
-              {!tablesStatus.penyakit_config && ' (Sementara)'}
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-
-      {/* Modal Edit Pertanyaan */}
-      <Modal isOpen={isEditOpen} onClose={onEditClose} size="xl">
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Edit Pertanyaan</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody>
-            <VStack spacing={4}>
-              <FormControl isRequired>
-                <FormLabel>Jenis Penyakit</FormLabel>
-                <Select
-                  value={formData.jenis_penyakit}
-                  onChange={(e) => setFormData(prev => ({ ...prev, jenis_penyakit: e.target.value }))}
-                >
-                  {jenisPenyakit.map((penyakit) => (
-                    <option key={penyakit.id} value={penyakit.nama_penyakit}>
-                      {penyakit.nama_penyakit}
-                    </option>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <FormControl isRequired>
-                <FormLabel>Tipe Pertanyaan</FormLabel>
-                <Select
-                  value={formData.tipe_pertanyaan}
-                  onChange={(e) => setFormData(prev => ({ ...prev, tipe_pertanyaan: e.target.value }))}
-                >
-                  {tipePertanyaanOptions.map((tipe) => (
-                    <option key={tipe.value} value={tipe.value}>
-                      {tipe.label}
-                    </option>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <FormControl isRequired>
-                <FormLabel>Pertanyaan</FormLabel>
-                <Textarea
-                  value={formData.pertanyaan_text}
-                  onChange={(e) => setFormData(prev => ({ ...prev, pertanyaan_text: e.target.value }))}
-                  placeholder="Teks pertanyaan untuk user"
-                  rows={3}
-                />
-              </FormControl>
-
-              {formData.tipe_pertanyaan === 'essay' && (
-                <FormControl isRequired>
-                  <FormLabel>Keyword Jawaban</FormLabel>
-                  <Input
-                    value={formData.keyword_jawaban}
-                    onChange={(e) => setFormData(prev => ({ ...prev, keyword_jawaban: e.target.value }))}
-                    placeholder="pisahkan dengan koma, contoh: lemas,lelah,pusing"
-                  />
-                </FormControl>
-              )}
-
-              <FormControl>
-                <FormLabel>Tipe Indikator</FormLabel>
-                <HStack spacing={4}>
+          {/* Action Bar */}
+          <Card>
+            <CardBody>
+              <VStack spacing={4}>
+                <HStack w="full" justify="space-between">
+                  <Button
+                    colorScheme="purple"
+                    leftIcon={<FiPlus />}
+                    onClick={() => {
+                      resetForm();
+                      onModalOpen();
+                    }}
+                  >
+                    Tambah Pertanyaan
+                  </Button>
+                  
                   <HStack>
-                    <Switch
-                      isChecked={formData.is_positive_indicator}
-                      onChange={(e) => setFormData(prev => ({ ...prev, is_positive_indicator: e.target.checked }))}
-                      colorScheme="green"
-                    />
-                    <Text fontSize="sm">
-                      {formData.is_positive_indicator ? 'Indikator Positif' : 'Indikator Negatif'}
-                    </Text>
+                    <Button
+                      variant="outline"
+                      leftIcon={<FiRefreshCw />}
+                      onClick={fetchPertanyaan}
+                      isLoading={loading}
+                    >
+                      Refresh
+                    </Button>
                   </HStack>
-                  <Badge colorScheme={formData.is_positive_indicator ? 'green' : 'red'} fontSize="xs">
-                    {formData.is_positive_indicator ? 'YA menambah score' : 'YA mengurangi score'}
-                  </Badge>
                 </HStack>
-              </FormControl>
 
-              <FormControl isRequired>
-                <FormLabel>Score</FormLabel>
-                <NumberInput
-                  value={formData.score}
-                  onChange={(value) => setFormData(prev => ({ ...prev, score: parseInt(value) || 1 }))}
-                  min={1}
-                  max={10}
-                >
-                  <NumberInputField />
-                  <NumberInputStepper>
-                    <NumberIncrementStepper />
-                    <NumberDecrementStepper />
-                  </NumberInputStepper>
-                </NumberInput>
-              </FormControl>
+                {/* Search and Filters */}
+                <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4} w="full">
+                  <FormControl>
+                    <FormLabel>Cari Pertanyaan/Keyword</FormLabel>
+                    <Input
+                      placeholder="Cari pertanyaan, penyakit, atau keyword..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </FormControl>
 
-              <FormControl>
-                <FormLabel>Tingkat Keparahan</FormLabel>
-                <Select
-                  value={formData.tingkat_keparahan}
-                  onChange={(e) => setFormData(prev => ({ ...prev, tingkat_keparahan: e.target.value }))}
-                >
-                  {tingkatKeparahanOptions.map((tingkat) => (
-                    <option key={tingkat.value} value={tingkat.value}>
-                      {tingkat.label} (Score: {tingkat.score})
-                    </option>
-                  ))}
-                </Select>
-              </FormControl>
+                  <FormControl>
+                    <FormLabel>Filter Jenis Penyakit</FormLabel>
+                    <Select
+                      value={filterJenis}
+                      onChange={(e) => setFilterJenis(e.target.value)}
+                      placeholder="Semua jenis"
+                    >
+                      {uniquePenyakit.map(penyakit => (
+                        <option key={penyakit} value={penyakit}>
+                          {penyakit}
+                        </option>
+                      ))}
+                    </Select>
+                  </FormControl>
 
-              <FormControl>
-                <FormLabel>Saran</FormLabel>
-                <Textarea
-                  value={formData.saran}
-                  onChange={(e) => setFormData(prev => ({ ...prev, saran: e.target.value }))}
-                  placeholder="Saran untuk user berdasarkan jawaban"
-                  rows={2}
-                />
-              </FormControl>
+                  <FormControl>
+                    <FormLabel>Filter Tipe Pertanyaan</FormLabel>
+                    <Select
+                      value={filterTipe}
+                      onChange={(e) => setFilterTipe(e.target.value)}
+                      placeholder="Semua tipe"
+                    >
+                      <option value="ya_tidak">Ya/Tidak</option>
+                      <option value="essay">Essay</option>
+                    </Select>
+                  </FormControl>
+                </SimpleGrid>
+              </VStack>
+            </CardBody>
+          </Card>
 
-              <FormControl>
-                <FormLabel>Indikasi</FormLabel>
-                <Textarea
-                  value={formData.indikasi}
-                  onChange={(e) => setFormData(prev => ({ ...prev, indikasi: e.target.value }))}
-                  placeholder="Indikasi kesehatan (untuk analisis internal)"
-                  rows={2}
-                />
-              </FormControl>
-            </VStack>
+          {/* Pertanyaan Table */}
+          <Card>
+            <CardBody>
+              {pertanyaan.length === 0 ? (
+                <Alert status="info" borderRadius="md">
+                  <AlertIcon />
+                  <Box>
+                    <Text fontWeight="bold">Belum ada pertanyaan</Text>
+                    <Text fontSize="sm">
+                      Tambah pertanyaan pertama Anda untuk sistem diagnosa kesehatan.
+                    </Text>
+                  </Box>
+                </Alert>
+              ) : filteredPertanyaan.length === 0 ? (
+                <Alert status="warning" borderRadius="md">
+                  <AlertIcon />
+                  <Text>Tidak ada pertanyaan yang sesuai dengan filter.</Text>
+                </Alert>
+              ) : (
+                <Box overflowX="auto">
+                  <Table variant="simple">
+                    <Thead>
+                      <Tr>
+                        <Th>Pertanyaan</Th>
+                        <Th>Jenis Penyakit</Th>
+                        <Th>Tipe</Th>
+                        <Th>Score</Th>
+                        <Th>Keyword</Th>
+                        <Th>Tanggal</Th>
+                        <Th>Aksi</Th>
+                      </Tr>
+                    </Thead>
+                    <Tbody>
+                      {filteredPertanyaan.map((item) => (
+                        <Tr key={item.id} _hover={{ bg: 'gray.50' }}>
+                          <Td maxW="300px">
+                            <VStack align="start" spacing={1}>
+                              <Text fontWeight="medium" noOfLines={2}>
+                                {item.pertanyaan_text}
+                              </Text>
+                              {item.indikasi && (
+                                <Text fontSize="xs" color="gray.600" noOfLines={1}>
+                                  💡 {item.indikasi}
+                                </Text>
+                              )}
+                            </VStack>
+                          </Td>
+                          <Td>
+                            <Badge colorScheme="blue" variant="subtle">
+                              {item.jenis_penyakit}
+                            </Badge>
+                          </Td>
+                          <Td>
+                            <Badge 
+                              colorScheme={item.tipe_pertanyaan === 'essay' ? 'purple' : 'green'}
+                              display="flex"
+                              alignItems="center"
+                              gap={1}
+                              px={2}
+                              py={1}
+                            >
+                              {item.tipe_pertanyaan === 'essay' ? <FiFileText size={12} /> : <FiMessageSquare size={12} />}
+                              {item.tipe_pertanyaan === 'essay' ? 'Essay' : 'Ya/Tidak'}
+                            </Badge>
+                          </Td>
+                          <Td>
+                            <Badge colorScheme="green">
+                              {item.score}
+                            </Badge>
+                          </Td>
+                          <Td>
+                            {item.keyword_jawaban ? (
+                              <Text fontSize="sm" color="gray.600" noOfLines={2}>
+                                {item.keyword_jawaban}
+                              </Text>
+                            ) : (
+                              <Text fontSize="sm" color="gray.400">-</Text>
+                            )}
+                          </Td>
+                          <Td>
+                            <Text fontSize="sm">{formatDate(item.created_at)}</Text>
+                          </Td>
+                          <Td>
+                            <HStack spacing={2}>
+                              <IconButton
+                                icon={<FiEdit />}
+                                size="sm"
+                                colorScheme="blue"
+                                variant="ghost"
+                                onClick={() => handleEdit(item)}
+                                aria-label="Edit pertanyaan"
+                              />
+                              <IconButton
+                                icon={<FiTrash2 />}
+                                size="sm"
+                                colorScheme="red"
+                                variant="ghost"
+                                onClick={() => handleDeleteClick(item.id)}
+                                aria-label="Delete pertanyaan"
+                              />
+                            </HStack>
+                          </Td>
+                        </Tr>
+                      ))}
+                    </Tbody>
+                  </Table>
+                </Box>
+              )}
+            </CardBody>
+          </Card>
+        </VStack>
+      </Container>
+
+      {/* Add/Edit Modal */}
+      <Modal isOpen={isModalOpen} onClose={onModalClose} size="4xl">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>
+            {editingId ? 'Edit Pertanyaan' : 'Tambah Pertanyaan Baru'}
+          </ModalHeader>
+          <ModalCloseButton />
+          <ModalBody pb={6}>
+            <Tabs>
+              <TabList>
+                <Tab>Informasi Dasar</Tab>
+                <Tab>Konfigurasi Essay</Tab>
+                <Tab>Informasi Medis</Tab>
+              </TabList>
+
+              <TabPanels>
+                {/* Tab 1: Informasi Dasar */}
+                <TabPanel>
+                  <VStack as="form" spacing={4} onSubmit={handleSubmit}>
+                    <FormControl isRequired>
+                      <FormLabel>Pertanyaan</FormLabel>
+                      <Textarea
+                        name="pertanyaan_text"
+                        value={formData.pertanyaan_text}
+                        onChange={handleInputChange}
+                        placeholder="Masukkan pertanyaan kesehatan..."
+                        rows={3}
+                      />
+                    </FormControl>
+
+                    <FormControl isRequired>
+                      <FormLabel>Jenis Penyakit</FormLabel>
+                      <Input
+                        name="jenis_penyakit"
+                        value={formData.jenis_penyakit}
+                        onChange={handleInputChange}
+                        placeholder="Contoh: Anemia, Diabetes, Hipertensi"
+                      />
+                    </FormControl>
+
+                    <FormControl isRequired>
+                      <FormLabel>Tipe Pertanyaan</FormLabel>
+                      <Select
+                        name="tipe_pertanyaan"
+                        value={formData.tipe_pertanyaan}
+                        onChange={handleInputChange}
+                      >
+                        <option value="ya_tidak">Ya/Tidak</option>
+                        <option value="essay">Essay (Jawaban Text)</option>
+                      </Select>
+                    </FormControl>
+
+                    <FormControl isRequired>
+                      <FormLabel>Score</FormLabel>
+                      <Input
+                        type="number"
+                        name="score"
+                        value={formData.score}
+                        onChange={handleInputChange}
+                        min="1"
+                        max="10"
+                      />
+                      <Text fontSize="sm" color="gray.500" mt={1}>
+                        Nilai score yang ditambahkan jika jawaban positif
+                      </Text>
+                    </FormControl>
+                  </VStack>
+                </TabPanel>
+
+                {/* Tab 2: Konfigurasi Essay */}
+                <TabPanel>
+                  <VStack spacing={4}>
+                    <Alert status="info" borderRadius="md">
+                      <AlertIcon />
+                      <Text fontSize="sm">
+                        Konfigurasi ini hanya diperlukan untuk pertanyaan tipe Essay
+                      </Text>
+                    </Alert>
+
+                    <FormControl isRequired={formData.tipe_pertanyaan === 'essay'}>
+                      <FormLabel>Keyword Jawaban</FormLabel>
+                      <Textarea
+                        name="keyword_jawaban"
+                        value={formData.keyword_jawaban}
+                        onChange={handleInputChange}
+                        placeholder="Masukkan keyword yang menandakan jawaban positif (pisahkan dengan koma)"
+                        rows={3}
+                      />
+                      <Text fontSize="sm" color="gray.500" mt={1}>
+                        Contoh: lelah,lesu,kurang energi,lemah,capai
+                      </Text>
+                    </FormControl>
+
+                    <FormControl>
+                      <FormLabel>Indikasi</FormLabel>
+                      <Input
+                        name="indikasi"
+                        value={formData.indikasi}
+                        onChange={handleInputChange}
+                        placeholder="Indikasi medis dari pertanyaan ini"
+                      />
+                    </FormControl>
+                  </VStack>
+                </TabPanel>
+
+                {/* Tab 3: Informasi Medis */}
+                <TabPanel>
+                  <VStack spacing={4}>
+                    <FormControl>
+                      <FormLabel>Saran</FormLabel>
+                      <Textarea
+                        name="saran"
+                        value={formData.saran}
+                        onChange={handleInputChange}
+                        placeholder="Saran untuk pengguna jika jawaban positif"
+                        rows={2}
+                      />
+                    </FormControl>
+
+                    <FormControl>
+                      <FormLabel>Penanganan</FormLabel>
+                      <Textarea
+                        name="penanganan"
+                        value={formData.penanganan}
+                        onChange={handleInputChange}
+                        placeholder="Penanganan medis yang disarankan"
+                        rows={2}
+                      />
+                    </FormControl>
+
+                    <FormControl>
+                      <FormLabel>Rekomendasi</FormLabel>
+                      <Textarea
+                        name="rekomendasi"
+                        value={formData.rekomendasi}
+                        onChange={handleInputChange}
+                        placeholder="Rekomendasi gaya hidup atau pengobatan"
+                        rows={2}
+                      />
+                    </FormControl>
+                  </VStack>
+                </TabPanel>
+              </TabPanels>
+            </Tabs>
+
+            {/* Action Buttons */}
+            <HStack w="full" justify="flex-end" spacing={3} pt={6} borderTop="1px" borderColor="gray.200">
+              <Button onClick={onModalClose} variant="outline">
+                Batal
+              </Button>
+              <Button
+                type="submit"
+                colorScheme="purple"
+                isLoading={submitting}
+                loadingText="Menyimpan..."
+                onClick={handleSubmit}
+              >
+                {editingId ? 'Update' : 'Simpan'}
+              </Button>
+            </HStack>
           </ModalBody>
-          <ModalFooter>
-            <Button variant="ghost" mr={3} onClick={onEditClose}>
-              Batal
-            </Button>
-            <Button 
-              colorScheme="blue" 
-              onClick={handleUpdatePertanyaan}
-              isLoading={submitting}
-            >
-              Update Pertanyaan
-              {!tablesStatus.pertanyaan && ' (Sementara)'}
-            </Button>
-          </ModalFooter>
         </ModalContent>
       </Modal>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog
+        isOpen={isDeleteOpen}
+        leastDestructiveRef={cancelRef}
+        onClose={onDeleteClose}
+      >
+        <AlertDialogOverlay>
+          <AlertDialogContent>
+            <AlertDialogHeader fontSize="lg" fontWeight="bold">
+              Hapus Pertanyaan
+            </AlertDialogHeader>
+
+            <AlertDialogBody>
+              Apakah Anda yakin ingin menghapus pertanyaan ini? Tindakan ini tidak dapat dibatalkan.
+            </AlertDialogBody>
+
+            <AlertDialogFooter>
+              <Button ref={cancelRef} onClick={onDeleteClose}>
+                Batal
+              </Button>
+              <Button colorScheme="red" onClick={handleDeleteConfirm} ml={3}>
+                Hapus
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialogOverlay>
+      </AlertDialog>
     </AdminLayout>
   );
 }

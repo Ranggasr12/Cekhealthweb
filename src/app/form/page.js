@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Container,
@@ -27,29 +27,27 @@ import {
   CardBody,
   CardHeader,
   Badge,
-  Link,
   useToast,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  ModalCloseButton,
-  useDisclosure,
   SimpleGrid,
-  Image,
   AspectRatio,
   Icon,
   Textarea,
   Progress,
 } from "@chakra-ui/react";
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { 
+  collection, 
+  getDocs, 
+  query, 
+  orderBy,
+  addDoc,
+  serverTimestamp 
+} from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { jsPDF } from 'jspdf';
-import { ExternalLinkIcon, DownloadIcon as ChakraDownloadIcon } from '@chakra-ui/icons';
+import { ExternalLinkIcon } from '@chakra-ui/icons';
 
-// SVG Icons
+// SVG Icons (tetap sama seperti sebelumnya)
 const ChevronLeftIcon = (props) => (
   <svg
     stroke="currentColor"
@@ -143,7 +141,6 @@ const YesNoIcon = (props) => (
 export default function FormPage() {
   const router = useRouter();
   const toast = useToast();
-  const { isOpen, onOpen, onClose } = useDisclosure();
   const [isClient, setIsClient] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [pertanyaan, setPertanyaan] = useState([]);
@@ -166,26 +163,27 @@ export default function FormPage() {
     fetchPertanyaan();
   }, []);
 
-  // Fetch pertanyaan dari database
+  // Fetch pertanyaan dari Firestore
   const fetchPertanyaan = async () => {
     try {
       setLoadingPertanyaan(true);
-      const { data, error } = await supabase
-        .from('pertanyaan')
-        .select('*')
-        .order('created_at', { ascending: true });
       
-      if (error) {
-        console.error('Error fetching questions:', error);
-        // Fallback jika tabel belum ada
-        setPertanyaan([]);
-        return;
-      }
+      const q = query(
+        collection(db, 'pertanyaan'), 
+        orderBy('created_at', 'asc')
+      );
       
-      console.log('Pertanyaan loaded:', data?.length || 0);
-      setPertanyaan(data || []);
+      const querySnapshot = await getDocs(q);
+      const pertanyaanData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      console.log('✅ Pertanyaan loaded:', pertanyaanData.length);
+      setPertanyaan(pertanyaanData);
+      
     } catch (error) {
-      console.error('Error fetching questions:', error);
+      console.error('❌ Error fetching questions:', error);
       toast({
         title: 'Error',
         description: 'Gagal memuat pertanyaan',
@@ -198,33 +196,37 @@ export default function FormPage() {
     }
   };
 
-  // Fetch materi penyakit
+  // Fetch materi penyakit dari Firestore
   const fetchMateriPenyakit = async (penyakitNames) => {
     if (penyakitNames.length === 0) return;
     
     setLoadingMateri(true);
     try {
-      const { data, error } = await supabase
-        .from('materi_penyakit')
-        .select('*')
-        .in('nama_penyakit', penyakitNames)
-        .eq('jenis_materi', 'video');
+      const q = query(
+        collection(db, 'materi_penyakit'),
+        orderBy('created_at', 'desc')
+      );
       
-      if (error) {
-        console.error('Error fetching materials:', error);
-        return;
-      }
+      const querySnapshot = await getDocs(q);
+      const materiData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      const filteredMateri = materiData.filter(materi => 
+        penyakitNames.includes(materi.nama_penyakit)
+      );
 
       const groupedMateri = {};
       penyakitNames.forEach(penyakit => {
         groupedMateri[penyakit] = {
-          videos: data?.filter(m => m.nama_penyakit === penyakit) || []
+          videos: filteredMateri.filter(m => m.nama_penyakit === penyakit && m.jenis_materi === 'video') || []
         };
       });
 
       setMateriPenyakit(groupedMateri);
     } catch (error) {
-      console.error('Error fetching materials:', error);
+      console.error('❌ Error fetching materials:', error);
     } finally {
       setLoadingMateri(false);
     }
@@ -254,15 +256,25 @@ export default function FormPage() {
     }));
   };
 
-  // Fungsi analisis jawaban essay
+  // Fungsi analisis jawaban essay yang lebih cerdas
   const analyzeEssayAnswer = (jawabanText, keywords) => {
     if (!jawabanText || !keywords) return false;
     
     const keywordList = keywords.split(',').map(k => k.trim().toLowerCase());
     const jawabanLower = jawabanText.toLowerCase();
     
-    // Cek apakah ada keyword yang match
-    return keywordList.some(keyword => jawabanLower.includes(keyword));
+    // Hitung persentase kemiripan
+    let matchCount = 0;
+    keywordList.forEach(keyword => {
+      if (jawabanLower.includes(keyword)) {
+        matchCount++;
+      }
+    });
+    
+    const similarityPercentage = (matchCount / keywordList.length) * 100;
+    
+    // Return true jika similarity > 30%
+    return similarityPercentage > 30;
   };
 
   // Validasi form sebelum submit
@@ -324,19 +336,39 @@ export default function FormPage() {
   // Fungsi untuk memastikan confidence level valid
   const getValidConfidenceLevel = (confidence) => {
     const level = confidence?.toLowerCase() || 'rendah';
-    
-    // Pastikan hanya nilai yang diizinkan oleh constraint database
     const validLevels = ['rendah', 'sedang', 'tinggi'];
     return validLevels.includes(level) ? level : 'rendah';
   };
 
-  // Submit form - FIXED VERSION
+  // Fungsi untuk membersihkan data sebelum disimpan ke Firestore
+  const cleanDataForFirestore = (data) => {
+    const cleaned = {};
+    
+    Object.keys(data).forEach(key => {
+      const value = data[key];
+      
+      if (value !== undefined && value !== null && value !== '') {
+        if (typeof value === 'object' && !(value instanceof Date)) {
+          const cleanedObject = cleanDataForFirestore(value);
+          if (Object.keys(cleanedObject).length > 0) {
+            cleaned[key] = cleanedObject;
+          }
+        } else {
+          cleaned[key] = value;
+        }
+      }
+    });
+    
+    return cleaned;
+  };
+
+  // Submit form
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (!validateForm()) return;
 
-    console.log("Form submitted:", { formData, jawaban });
+    console.log("🔄 Form submitted:", { formData, jawaban });
     setShowResults(true);
     
     const results = calculateResults();
@@ -348,50 +380,31 @@ export default function FormPage() {
       await fetchMateriPenyakit(detectedDiseaseNames);
     }
 
-    // Simpan hasil ke database - FIXED confidence_level
+    // Simpan hasil ke Firestore
     try {
       const confidenceLevel = getValidConfidenceLevel(results.detectedDiseases[0]?.confidence);
 
-      const { error } = await supabase
-        .from('hasil_diagnosa')
-        .insert([{
-          nama: formData.nama,
-          usia: parseInt(formData.usia),
-          jenis_kelamin: formData.jenisKelamin,
-          email: formData.email || null,
-          telepon: formData.telepon || null,
-          jawaban: jawaban,
-          hasil: results,
-          total_score: results.detectedDiseases.reduce((sum, disease) => sum + disease.score, 0),
-          penyakit_terdeteksi: results.detectedDiseases.map(d => d.name),
-          confidence_level: confidenceLevel, // ✅ FIXED
-          created_at: new Date().toISOString()
-        }]);
+      const dataToSave = {
+        nama: formData.nama.trim(),
+        usia: parseInt(formData.usia) || 0,
+        jenis_kelamin: formData.jenisKelamin,
+        email: formData.email?.trim() || null,
+        telepon: formData.telepon?.trim() || null,
+        jawaban: cleanDataForFirestore(jawaban),
+        hasil: cleanDataForFirestore(results),
+        total_score: results.detectedDiseases.reduce((sum, disease) => sum + (disease.score || 0), 0),
+        penyakit_terdeteksi: results.detectedDiseases.map(d => d.name).filter(name => name && name !== "Tidak Terdeteksi Penyakit Serius"),
+        confidence_level: confidenceLevel,
+        created_at: serverTimestamp()
+      };
 
-      if (error) {
-        console.error('Database error:', error);
-        
-        // Fallback: coba insert tanpa confidence_level jika masih error
-        const { error: fallbackError } = await supabase
-          .from('hasil_diagnosa')
-          .insert([{
-            nama: formData.nama,
-            usia: parseInt(formData.usia),
-            jenis_kelamin: formData.jenisKelamin,
-            email: formData.email || null,
-            telepon: formData.telepon || null,
-            jawaban: jawaban,
-            hasil: results,
-            total_score: results.detectedDiseases.reduce((sum, disease) => sum + disease.score, 0),
-            penyakit_terdeteksi: results.detectedDiseases.map(d => d.name),
-            confidence_level: null, // ❌ Set null jika masih bermasalah
-            created_at: new Date().toISOString()
-          }]);
+      const cleanedData = cleanDataForFirestore(dataToSave);
 
-        if (fallbackError) {
-          throw fallbackError;
-        }
-      }
+      console.log('🔄 Saving to Firestore:', cleanedData);
+
+      await addDoc(collection(db, 'hasil_diagnosa'), cleanedData);
+
+      console.log('✅ Results saved to Firestore');
       
       toast({
         title: 'Berhasil',
@@ -400,8 +413,7 @@ export default function FormPage() {
         duration: 3000,
       });
     } catch (error) {
-      console.error('Error saving results:', error);
-      // Tetap tampilkan hasil meskipun gagal save
+      console.error('❌ Error saving results:', error);
       toast({
         title: 'Info',
         description: 'Hasil skrining ditampilkan, tetapi gagal menyimpan ke database',
@@ -411,14 +423,19 @@ export default function FormPage() {
     }
   };
 
-  // Kalkulasi hasil - FIXED VERSION
+  // Kalkulasi hasil berdasarkan jawaban
   const calculateResults = () => {
     const scores = {};
     const penyakitMap = {};
     const semuaSaran = [];
+    const semuaPenanganan = [];
+    const semuaRekomendasi = [];
+    const semuaIndikasi = [];
     const detailAnalisis = [];
     
     pertanyaan.forEach(question => {
+      if (!question || !question.jenis_penyakit) return;
+      
       const penyakit = question.jenis_penyakit;
       if (!scores[penyakit]) {
         scores[penyakit] = 0;
@@ -428,70 +445,111 @@ export default function FormPage() {
       const jawabanValue = jawaban[question.id];
       let scoreDitambahkan = 0;
       let analisis = '';
+      let isPositive = false;
       
       if (question.tipe_pertanyaan === 'ya_tidak') {
         // Untuk pertanyaan ya/tidak
         if (jawabanValue === 'ya') {
-          scoreDitambahkan = question.score;
+          scoreDitambahkan = question.score || 0;
           scores[penyakit] += scoreDitambahkan;
-          if (question.saran) {
-            semuaSaran.push({
-              saran: question.saran,
-              penyakit: penyakit
-            });
-          }
-          analisis = `Jawaban "Ya" - Score: +${question.score}`;
+          isPositive = true;
+          analisis = `Jawaban "Ya" - Score: +${scoreDitambahkan}`;
         } else {
           analisis = `Jawaban "Tidak" - Score: +0`;
         }
       } else if (question.tipe_pertanyaan === 'essay') {
         // Untuk pertanyaan essay - analisis keyword
         if (jawabanValue && analyzeEssayAnswer(jawabanValue, question.keyword_jawaban)) {
-          scoreDitambahkan = question.score;
+          scoreDitambahkan = question.score || 0;
           scores[penyakit] += scoreDitambahkan;
-          if (question.saran) {
-            semuaSaran.push({
-              saran: question.saran,
-              penyakit: penyakit
-            });
-          }
-          analisis = `Essay - Keyword terdeteksi - Score: +${question.score}`;
+          isPositive = true;
+          analisis = `Essay - Keyword terdeteksi - Score: +${scoreDitambahkan}`;
         } else {
           analisis = `Essay - Keyword tidak terdeteksi - Score: +0`;
         }
       }
       
+      // Jika jawaban positif, tambahkan informasi dari pertanyaan
+      if (isPositive) {
+        if (question.saran) {
+          semuaSaran.push({
+            saran: question.saran,
+            penyakit: penyakit
+          });
+        }
+        if (question.penanganan) {
+          semuaPenanganan.push({
+            penanganan: question.penanganan,
+            penyakit: penyakit
+          });
+        }
+        if (question.rekomendasi) {
+          semuaRekomendasi.push({
+            rekomendasi: question.rekomendasi,
+            penyakit: penyakit
+          });
+        }
+        if (question.indikasi) {
+          semuaIndikasi.push({
+            indikasi: question.indikasi,
+            penyakit: penyakit
+          });
+        }
+      }
+      
       penyakitMap[penyakit].push({
-        pertanyaan: question.pertanyaan_text,
-        jawaban: jawabanValue,
-        tipe: question.tipe_pertanyaan,
-        saran: question.saran,
-        indikasi: question.indikasi,
-        score: scoreDitambahkan
+        pertanyaan: question.pertanyaan_text || 'Pertanyaan tidak tersedia',
+        jawaban: jawabanValue || '',
+        tipe: question.tipe_pertanyaan || 'ya_tidak',
+        saran: question.saran || '',
+        indikasi: question.indikasi || '',
+        penanganan: question.penanganan || '',
+        rekomendasi: question.rekomendasi || '',
+        score: scoreDitambahkan,
+        isPositive: isPositive
       });
 
       detailAnalisis.push({
-        pertanyaan: question.pertanyaan_text,
-        tipe: question.tipe_pertanyaan,
+        pertanyaan: question.pertanyaan_text || 'Pertanyaan tidak tersedia',
+        tipe: question.tipe_pertanyaan || 'ya_tidak',
         analisis: analisis,
         score: scoreDitambahkan
       });
     });
 
-    // Determine diseases with high risk - IMPROVED LOGIC
+    // Determine diseases dengan risk
     const detectedDiseases = [];
     Object.keys(scores).forEach(penyakit => {
-      const score = scores[penyakit];
-      const totalQuestions = penyakitMap[penyakit].length;
+      const score = scores[penyakit] || 0;
+      const totalQuestions = penyakitMap[penyakit]?.length || 0;
       
-      // Hitung persentase berdasarkan total pertanyaan untuk penyakit tersebut
-      const maxPossibleScore = totalQuestions * 3; // Asumsi score maks 3 per pertanyaan
+      const maxPossibleScore = totalQuestions * 3;
       const percentage = maxPossibleScore > 0 ? (score / maxPossibleScore) * 100 : 0;
       
       // Threshold untuk mendeteksi penyakit
       if (percentage >= 30 || score >= 2) {
-        // Filter saran untuk penyakit ini saja
-        const saranPenyakit = semuaSaran.filter(s => s.penyakit === penyakit).map(s => s.saran);
+        // Filter informasi untuk penyakit ini
+        const saranPenyakit = semuaSaran
+          .filter(s => s.penyakit === penyakit)
+          .map(s => s.saran)
+          .filter(s => s);
+
+        const penangananPenyakit = semuaPenanganan
+          .filter(p => p.penyakit === penyakit)
+          .map(p => p.penanganan)
+          .filter(p => p);
+
+        const rekomendasiPenyakit = semuaRekomendasi
+          .filter(r => r.penyakit === penyakit)
+          .map(r => r.rekomendasi)
+          .filter(r => r);
+
+        const indikasiPenyakit = semuaIndikasi
+          .filter(i => i.penyakit === penyakit)
+          .map(i => i.indikasi)
+          .filter(i => i);
+
+        const questions = penyakitMap[penyakit] || [];
         
         detectedDiseases.push({
           name: penyakit,
@@ -499,10 +557,11 @@ export default function FormPage() {
           score: score,
           total: totalQuestions,
           percentage: percentage,
-          questions: penyakitMap[penyakit],
+          questions: questions,
           saran: saranPenyakit,
-          penanganan: getPenanganan(penyakit, percentage),
-          rekomendasi: getRekomendasi(penyakit, percentage)
+          penanganan: penangananPenyakit,
+          rekomendasi: rekomendasiPenyakit,
+          indikasi: indikasiPenyakit
         });
       }
     });
@@ -519,140 +578,25 @@ export default function FormPage() {
         saran: ["Pertahankan pola hidup sehat yang sudah Anda jalani"],
         penanganan: [
           "Teruskan pola hidup sehat yang sudah Anda jalani",
-          "Monitor kesehatan secara berkala",
-          "Lakukan aktivitas fisik ringan secara teratur"
+          "Monitor kesehatan secara berkala"
         ],
         rekomendasi: [
           "Tetap jaga pola hidup sehat dengan makan makanan bergizi",
           "Lakukan olahraga rutin minimal 30 menit per hari",
-          "Lakukan pemeriksaan kesehatan rutin setahun sekali",
-          "Konsultasi dokter jika muncul gejala baru"
-        ]
+          "Lakukan pemeriksaan kesehatan rutin setahun sekali"
+        ],
+        indikasi: ["Tidak terdeteksi gejala penyakit serius berdasarkan jawaban yang diberikan"]
       });
     }
 
     return {
-      scores,
-      detectedDiseases,
-      detailAnalisis,
+      scores: scores || {},
+      detectedDiseases: detectedDiseases || [],
+      detailAnalisis: detailAnalisis || [],
       summary: `Terdeteksi ${detectedDiseases.length} potensi kondisi kesehatan`,
-      totalPertanyaan: pertanyaan.length,
-      pertanyaanTerjawab: Object.keys(jawaban).length
+      totalPertanyaan: pertanyaan.length || 0,
+      pertanyaanTerjawab: Object.keys(jawaban).length || 0
     };
-  };
-
-  // Data penanganan berdasarkan penyakit
-  const getPenanganan = (penyakit, percentage) => {
-    const penanganan = {
-      'Diabetes': [
-        "Segera konsultasi dengan dokter spesialis penyakit dalam",
-        "Lakukan pemeriksaan gula darah lengkap (GDP, 2JPP, HbA1c)",
-        "Mulai pengaturan pola makan dengan mengurangi asupan gula dan karbohidrat sederhana",
-        "Monitor gula darah mandiri secara rutin",
-        "Lakukan aktivitas fisik ringan secara teratur"
-      ],
-      'Hipertensi': [
-        "Konsultasi dengan dokter untuk pengukuran tekanan darah yang akurat",
-        "Lakukan pemantauan tekanan darah harian",
-        "Mulai terapi non-farmakologi dengan mengurangi garam",
-        "Evaluasi faktor risiko kardiovaskular lainnya",
-        "Kelola stres dengan teknik relaksasi"
-      ],
-      'Jantung': [
-        "Segera konsultasi dengan dokter spesialis jantung",
-        "Lakukan pemeriksaan EKG dan ekokardiografi",
-        "Evaluasi faktor risiko jantung secara menyeluruh",
-        "Mulai modifikasi gaya hidup jantung sehat",
-        "Hindari aktivitas berat mendadak"
-      ],
-      'Kolesterol': [
-        "Konsultasi dengan dokter untuk pemeriksaan lipid profile",
-        "Lakukan pemeriksaan kolesterol lengkap (LDL, HDL, Trigliserida)",
-        "Mulai diet rendah lemak jenuh dan kolesterol",
-        "Tingkatkan aktivitas fisik secara bertahap",
-        "Perbanyak konsumsi serat dan omega-3"
-      ],
-      'Asma': [
-        "Konsultasi dengan dokter spesialis paru",
-        "Lakukan tes fungsi paru (spirometri)",
-        "Identifikasi dan hindari pemicu alergi",
-        "Pelajari teknik pernapasan yang benar",
-        "Selalu siapkan inhaler emergency"
-      ],
-      'Gastrointestinal': [
-        "Konsultasi dengan dokter spesialis pencernaan",
-        "Lakukan pemeriksaan penunjang jika diperlukan",
-        "Modifikasi pola makan menjadi lebih teratur",
-        "Hindari makanan yang memicu gejala",
-        "Kelola stres dengan baik"
-      ],
-      'Umum': [
-        "Konsultasi dengan dokter untuk evaluasi menyeluruh",
-        "Lakukan pemeriksaan laboratorium dasar",
-        "Terapkan pola hidup sehat secara konsisten",
-        "Monitor perkembangan gejala secara berkala",
-        "Istirahat yang cukup dan kelola stres"
-      ]
-    };
-
-    return penanganan[penyakit] || penanganan['Umum'];
-  };
-
-  // Data rekomendasi berdasarkan penyakit
-  const getRekomendasi = (penyakit, percentage) => {
-    const rekomendasi = {
-      'Diabetes': [
-        "Kontrol rutin ke dokter setiap 3 bulan sekali",
-        "Ikuti program edukasi diabetes",
-        "Bergabung dengan komunitas diabetes untuk dukungan",
-        "Pelajari cara menghitung indeks glikemik makanan",
-        "Monitor kaki setiap hari untuk luka atau lecet"
-      ],
-      'Hipertensi': [
-        "Lakukan pemeriksaan tekanan darah mingguan",
-        "Ikuti program pengelolaan stres",
-        "Kurangi konsumsi kopi dan alkohol",
-        "Tingkatkan konsumsi makanan kaya kalium",
-        "Jaga berat badan ideal"
-      ],
-      'Jantung': [
-        "Ikuti program rehabilitasi jantung",
-        "Pelajari tanda-tanda darurat jantung",
-        "Bawa obat emergency jika diperlukan",
-        "Hindari aktivitas berat mendadak",
-        "Kontrol faktor risiko seperti diabetes dan kolesterol"
-      ],
-      'Kolesterol': [
-        "Perbanyak konsumsi serat larut air",
-        "Tingkatkan konsumsi omega-3",
-        "Kontrol berat badan ideal",
-        "Hindari makanan cepat saji",
-        "Olahraga teratur 3-5 kali seminggu"
-      ],
-      'Asma': [
-        "Selalu bawa inhaler emergency",
-        "Hindari paparan asap dan polusi",
-        "Gunakan masker di tempat berdebu",
-        "Lakukan pemanasan sebelum olahraga",
-        "Jaga kebersihan lingkungan rumah"
-      ],
-      'Gastrointestinal': [
-        "Makan dengan porsi kecil tapi sering",
-        "Kunyah makanan secara perlahan",
-        "Hindari berbaring setelah makan",
-        "Kelola stres dengan baik",
-        "Hindari makanan pedas dan asam berlebihan"
-      ],
-      'Umum': [
-        "Lakukan medical check-up tahunan",
-        "Terapkan pola makan seimbang",
-        "Olahraga teratur 3-5 kali seminggu",
-        "Istirahat yang cukup dan kelola stres",
-        "Hindari rokok dan alkohol berlebihan"
-      ]
-    };
-
-    return rekomendasi[penyakit] || rekomendasi['Umum'];
   };
 
   // Navigasi
@@ -666,7 +610,6 @@ export default function FormPage() {
 
   const handleNext = () => {
     if (currentStep === 0) {
-      // Validasi data diri sebelum lanjut
       if (!formData.nama.trim() || !formData.usia || !formData.jenisKelamin) {
         toast({
           title: 'Data tidak lengkap',
@@ -700,6 +643,7 @@ export default function FormPage() {
 HASIL SKRINING KESEHATAN
 ========================
 
+INFORMASI MEDIS
 Data Pasien:
 - Nama: ${formData.nama}
 - Usia: ${formData.usia}
@@ -708,29 +652,17 @@ Data Pasien:
 - Telepon: ${formData.telepon || '-'}
 - Tanggal Pemeriksaan: ${new Date().toLocaleDateString('id-ID')}
 
-${results.summary}
-
 ${results.detectedDiseases.map(disease => `
-${disease.name.toUpperCase()}
-- Tingkat Keyakinan: ${disease.confidence}
-- Skor: ${disease.score} dari ${disease.total} pertanyaan
-- Persentase: ${disease.percentage.toFixed(1)}%
+Hasil Skrining Anda: Anda terindikasi ${disease.name}
 
-${disease.saran.length > 0 ? `Saran Khusus:\n${disease.saran.map(saran => `  💡 ${saran}`).join('\n')}\n` : ''}
+${disease.indikasi && disease.indikasi.length > 0 ? `Indikasi:\n${disease.indikasi.map(indikasi => `- ${indikasi}`).join('\n')}\n` : ''}
 
-Penanganan Segera:
-${disease.penanganan.map(item => `  • ${item}`).join('\n')}
+SARAN KHUSUS:
+${disease.saran.map(saran => `- ${saran}`).join('\n')}
 
-Rekomendasi Jangka Panjang:
-${disease.rekomendasi.map(item => `  • ${item}`).join('\n')}
+REKOMENDASI:
+${disease.rekomendasi.map(item => `- ${item}`).join('\n')}
 `).join('\n' + '='.repeat(40) + '\n')}
-
-Detail Analisis:
-${results.detailAnalisis.map((item, index) => `
-${index + 1}. ${item.pertanyaan}
-   Tipe: ${item.tipe === 'essay' ? 'Essay' : 'Ya/Tidak'}
-   ${item.analisis}
-`).join('\n')}
 
 Catatan:
 Hasil ini merupakan skrining awal berdasarkan gejala yang dilaporkan.
@@ -776,7 +708,7 @@ www.cekhealth.com
     // Data Pasien
     doc.setFontSize(14);
     doc.setTextColor(0, 0, 0);
-    doc.text('DATA PASIEN', 20, yPosition);
+    doc.text('INFORMASI MEDIS', 20, yPosition);
     yPosition += 10;
     
     doc.setFontSize(11);
@@ -793,18 +725,9 @@ www.cekhealth.com
     doc.text(`Tanggal Pemeriksaan: ${new Date().toLocaleDateString('id-ID')}`, 20, yPosition);
     yPosition += 15;
     
-    // Ringkasan Hasil
-    doc.setFontSize(14);
-    doc.text('HASIL SKRINING', 20, yPosition);
-    yPosition += 10;
-    
-    doc.setFontSize(11);
-    doc.text(results.summary, 20, yPosition);
-    yPosition += 15;
-    
     // Detail Hasil Skrining
     doc.setFontSize(14);
-    doc.text('DETAIL HASIL', 20, yPosition);
+    doc.text('HASIL SKRINING', 20, yPosition);
     yPosition += 10;
     
     results.detectedDiseases.forEach((disease, index) => {
@@ -815,63 +738,60 @@ www.cekhealth.com
       
       doc.setFontSize(12);
       doc.setTextColor(0, 0, 0);
-      doc.text(`ANDA TERINDIKASI: ${disease.name.toUpperCase()}`, 20, yPosition);
-      yPosition += 7;
-      
-      doc.setFontSize(10);
-      doc.text(`Status: ${disease.confidence}`, 20, yPosition);
-      yPosition += 5;
-      doc.text(`Skor: ${disease.score} dari ${disease.total} pertanyaan`, 20, yPosition);
-      yPosition += 5;
-      doc.text(`Persentase: ${disease.percentage.toFixed(1)}%`, 20, yPosition);
+      doc.text(`Hasil Skrining Anda: Anda terindikasi ${disease.name}`, 20, yPosition);
       yPosition += 10;
       
-      // Saran Khusus
-      if (disease.saran.length > 0) {
-        doc.text('SARAN KHUSUS:', 20, yPosition);
-        yPosition += 5;
+      // Indikasi - DI DALAM INFORMASI MEDIS
+      if (disease.indikasi && disease.indikasi.length > 0) {
+        doc.setFontSize(11);
+        doc.text('Indikasi:', 20, yPosition);
+        yPosition += 6;
         
-        disease.saran.forEach((saran, saranIndex) => {
+        disease.indikasi.forEach((indikasi, indikasiIndex) => {
           if (yPosition > 270) {
             doc.addPage();
             yPosition = 20;
           }
-          doc.text(`  💡 ${saran}`, 25, yPosition);
+          doc.text(`- ${indikasi}`, 25, yPosition);
           yPosition += 5;
         });
         
         yPosition += 5;
       }
       
-      // Penanganan Segera
-      doc.text('PENANGANAN SEGERA:', 20, yPosition);
-      yPosition += 5;
-      
-      disease.penanganan.forEach((item, itemIndex) => {
-        if (yPosition > 270) {
-          doc.addPage();
-          yPosition = 20;
-        }
-        doc.text(`  • ${item}`, 25, yPosition);
+      // Saran Khusus
+      if (disease.saran.length > 0) {
+        doc.text('SARAN KHUSUS:', 20, yPosition);
+        yPosition += 6;
+        
+        disease.saran.forEach((saran, saranIndex) => {
+          if (yPosition > 270) {
+            doc.addPage();
+            yPosition = 20;
+          }
+          doc.text(`- ${saran}`, 25, yPosition);
+          yPosition += 5;
+        });
+        
         yPosition += 5;
-      });
+      }
       
-      yPosition += 5;
-      
-      // Rekomendasi Jangka Panjang
-      doc.text('REKOMENDASI JANGKA PANJANG:', 20, yPosition);
-      yPosition += 5;
-      
-      disease.rekomendasi.forEach((item, itemIndex) => {
-        if (yPosition > 270) {
-          doc.addPage();
-          yPosition = 20;
-        }
-        doc.text(`  • ${item}`, 25, yPosition);
-        yPosition += 5;
-      });
-      
-      yPosition += 10;
+      // Rekomendasi
+      if (disease.rekomendasi.length > 0) {
+        doc.text('REKOMENDASI:', 20, yPosition);
+        yPosition += 6;
+        
+        disease.rekomendasi.forEach((item, itemIndex) => {
+          if (yPosition > 270) {
+            doc.addPage();
+            yPosition = 20;
+          }
+          doc.text(`- ${item}`, 25, yPosition);
+          yPosition += 5;
+        });
+        
+        yPosition += 10;
+      }
     });
     
     // Catatan Penting
@@ -1112,6 +1032,36 @@ www.cekhealth.com
                 <VStack spacing={6} align="stretch">
                   {results.detectedDiseases.map((disease, index) => (
                     <Box key={index}>
+                      {/* INFORMASI MEDIS - DENGAN INDIKASI */}
+                      <Box p={4} bg="blue.50" borderRadius="md" mb={4}>
+                        <Heading size="md" color="blue.700" mb={3}>
+                          INFORMASI MEDIS
+                        </Heading>
+                        <VStack align="start" spacing={2} mb={3}>
+                          <Text><strong>Nama:</strong> {formData.nama}</Text>
+                          <Text><strong>Usia:</strong> {formData.usia} tahun</Text>
+                          <Text><strong>Jenis Kelamin:</strong> {formData.jenisKelamin}</Text>
+                          <Text><strong>Hasil Skrining Anda:</strong> Anda terindikasi {disease.name}</Text>
+                        </VStack>
+                        
+                        {/* INDIKASI - DI DALAM INFORMASI MEDIS */}
+                        {disease.indikasi && disease.indikasi.length > 0 && (
+                          <Box mt={3}>
+                            <Text fontWeight="bold" color="blue.700" mb={2}>
+                              Indikasi:
+                            </Text>
+                            <VStack spacing={1} align="start">
+                              {disease.indikasi.map((indikasi, indikasiIndex) => (
+                                <Text key={indikasiIndex} color="gray.700">
+                                  • {indikasi}
+                                </Text>
+                              ))}
+                            </VStack>
+                          </Box>
+                        )}
+                      </Box>
+
+                      {/* Hasil Deteksi */}
                       <Box p={4} bg={disease.confidence === "Tinggi" ? "red.50" : disease.confidence === "Sedang" ? "orange.50" : "green.50"} borderRadius="md">
                         <HStack justify="space-between" mb={3}>
                           <Heading size="lg" color={disease.confidence === "Tinggi" ? "red.600" : disease.confidence === "Sedang" ? "orange.600" : "green.600"}>
@@ -1125,16 +1075,6 @@ www.cekhealth.com
                             py={1}
                           >
                             {disease.confidence === "Tinggi" ? "Prioritas Tinggi" : disease.confidence === "Sedang" ? "Perlu Perhatian" : "Kondisi Baik"}
-                          </Badge>
-                        </HStack>
-
-                        {/* Statistik Penyakit */}
-                        <HStack spacing={4} mb={4}>
-                          <Badge colorScheme="blue">
-                            Skor: {disease.score}/{disease.total}
-                          </Badge>
-                          <Badge colorScheme="purple">
-                            {disease.percentage.toFixed(1)}%
                           </Badge>
                         </HStack>
 
@@ -1154,33 +1094,21 @@ www.cekhealth.com
                           </Box>
                         )}
                         
-                        {/* Penanganan */}
-                        <Box mb={4}>
-                          <Text fontWeight="bold" color="gray.700" mb={2}>
-                            🎯 Penanganan yang Disarankan:
-                          </Text>
-                          <VStack spacing={2} align="start">
-                            {disease.penanganan.map((item, itemIndex) => (
-                              <Text key={itemIndex} color="gray.600">
-                                • {item}
-                              </Text>
-                            ))}
-                          </VStack>
-                        </Box>
-
                         {/* Rekomendasi */}
-                        <Box>
-                          <Text fontWeight="bold" color="gray.700" mb={2}>
-                            📝 Rekomendasi Jangka Panjang:
-                          </Text>
-                          <VStack spacing={2} align="start">
-                            {disease.rekomendasi.map((item, itemIndex) => (
-                              <Text key={itemIndex} color="gray.600">
-                                • {item}
-                              </Text>
-                            ))}
-                          </VStack>
-                        </Box>
+                        {disease.rekomendasi.length > 0 && (
+                          <Box>
+                            <Text fontWeight="bold" color="gray.700" mb={2}>
+                              📝 Rekomendasi:
+                            </Text>
+                            <VStack spacing={2} align="start">
+                              {disease.rekomendasi.map((item, itemIndex) => (
+                                <Text key={itemIndex} color="gray.600">
+                                  • {item}
+                                </Text>
+                              ))}
+                            </VStack>
+                          </Box>
+                        )}
                       </Box>
                       
                       {/* Materi Pembelajaran */}

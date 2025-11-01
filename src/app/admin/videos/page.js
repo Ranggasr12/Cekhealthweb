@@ -32,7 +32,17 @@ import {
   SimpleGrid,
   Spinner,
 } from '@chakra-ui/react';
-import { supabase } from '@/lib/supabase';
+import { 
+  collection, 
+  addDoc, 
+  getDocs, 
+  deleteDoc, 
+  doc, 
+  orderBy, 
+  query,
+  serverTimestamp 
+} from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import AdminLayout from '@/components/AdminLayout';
 import { FiTrash2, FiVideo, FiYoutube } from 'react-icons/fi';
 
@@ -46,44 +56,29 @@ export default function VideoManagement() {
   });
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [tableExists, setTableExists] = useState(true);
   const toast = useToast();
+
+  // Firestore collection reference
+  const videosCollectionRef = collection(db, 'videos');
 
   const fetchVideos = useCallback(async () => {
     setLoading(true);
     try {
-      console.log('🔄 Fetching videos...');
+      console.log('🔄 Fetching videos from Firestore...');
       
-      const { data, error } = await supabase
-        .from('videos')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const q = query(videosCollectionRef, orderBy('created_at', 'desc'));
+      const querySnapshot = await getDocs(q);
       
-      if (error) {
-        console.error('❌ Error fetching videos:', error);
-        
-        // Jika tabel tidak ada
-        if (error.code === '42P01') {
-          setTableExists(false);
-          toast({
-            title: 'Tabel Videos Belum Dibuat',
-            description: 'Silakan buat tabel videos terlebih dahulu di Supabase',
-            status: 'warning',
-            duration: 6000,
-            isClosable: true,
-          });
-          return;
-        }
-        
-        throw error;
-      }
+      const videosData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
       
-      console.log('✅ Videos loaded:', data?.length || 0);
-      setVideos(data || []);
-      setTableExists(true);
+      console.log('✅ Videos loaded:', videosData.length);
+      setVideos(videosData);
       
     } catch (error) {
-      console.error('❌ Error in fetchVideos:', error);
+      console.error('❌ Error fetching videos:', error);
       toast({
         title: 'Error',
         description: 'Gagal memuat data video: ' + error.message,
@@ -122,25 +117,17 @@ export default function VideoManagement() {
         }
       }
 
-      console.log('🔄 Adding video:', formData);
+      console.log('🔄 Adding video to Firestore:', formData);
 
-      const { error } = await supabase
-        .from('videos')
-        .insert([{
-          ...formData,
-          title: formData.title.trim(),
-          description: formData.description.trim() || null
-        }]);
-
-      if (error) {
-        console.error('❌ Insert error:', error);
-        
-        if (error.code === '42P01') {
-          throw new Error('Tabel videos belum dibuat. Silakan buat tabel terlebih dahulu.');
-        }
-        
-        throw error;
-      }
+      // Add document to Firestore
+      await addDoc(videosCollectionRef, {
+        title: formData.title.trim(),
+        video_url: formData.video_url.trim(),
+        description: formData.description.trim() || '',
+        video_type: formData.video_type,
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp()
+      });
 
       toast({
         title: 'Video berhasil ditambahkan!',
@@ -178,12 +165,7 @@ export default function VideoManagement() {
     if (!confirm('Apakah Anda yakin ingin menghapus video ini?')) return;
 
     try {
-      const { error } = await supabase
-        .from('videos')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await deleteDoc(doc(db, 'videos', id));
 
       toast({
         title: 'Video berhasil dihapus!',
@@ -223,20 +205,14 @@ export default function VideoManagement() {
     return video.video_url;
   };
 
-  const getYoutubeThumbnail = (videoUrl) => {
-    if (videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be')) {
-      let videoId = '';
-      
-      if (videoUrl.includes('youtu.be')) {
-        videoId = videoUrl.split('/').pop()?.split('?')[0];
-      } else {
-        const urlParams = new URLSearchParams(new URL(videoUrl).search);
-        videoId = urlParams.get('v');
-      }
-      
-      return videoId ? `https://img.youtube.com/vi/${videoId}/0.jpg` : null;
+  const formatDate = (timestamp) => {
+    if (!timestamp) return 'N/A';
+    
+    if (timestamp.toDate) {
+      return timestamp.toDate().toLocaleDateString('id-ID');
     }
-    return null;
+    
+    return new Date(timestamp).toLocaleDateString('id-ID');
   };
 
   return (
@@ -247,19 +223,6 @@ export default function VideoManagement() {
             <Heading size="lg" mb={2}>Kelola Video Edukasi</Heading>
             <Text color="gray.600">Tambah dan kelola video edukasi kesehatan untuk pengguna</Text>
           </Box>
-
-          {/* Alert jika tabel tidak ada */}
-          {!tableExists && (
-            <Alert status="error" borderRadius="md">
-              <AlertIcon />
-              <Box>
-                <Text fontWeight="bold">Tabel Videos Tidak Ditemukan</Text>
-                <Text fontSize="sm">
-                  Jalankan SQL setup untuk membuat tabel videos terlebih dahulu di Supabase Dashboard.
-                </Text>
-              </Box>
-            </Alert>
-          )}
 
           <Grid templateColumns={{ base: '1fr', lg: '1fr 1fr' }} gap={6}>
             {/* Add Video Form */}
@@ -326,7 +289,6 @@ export default function VideoManagement() {
                         isLoading={submitting}
                         loadingText="Menambahkan..."
                         leftIcon={<FiVideo />}
-                        isDisabled={!tableExists}
                       >
                         Tambah Video
                       </Button>
@@ -348,13 +310,6 @@ export default function VideoManagement() {
                     <Flex justify="center" py={8}>
                       <Spinner size="lg" color="blue.500" />
                     </Flex>
-                  ) : !tableExists ? (
-                    <Box textAlign="center" py={8}>
-                      <FiVideo size={48} color="#CBD5E0" />
-                      <Text color="gray.500" mt={4}>
-                        Tabel videos belum tersedia
-                      </Text>
-                    </Box>
                   ) : videos.length === 0 ? (
                     <Box textAlign="center" py={8}>
                       <FiVideo size={48} color="#CBD5E0" />
@@ -401,7 +356,7 @@ export default function VideoManagement() {
                               </Td>
                               <Td>
                                 <Text fontSize="sm">
-                                  {new Date(video.created_at).toLocaleDateString('id-ID')}
+                                  {formatDate(video.created_at)}
                                 </Text>
                               </Td>
                               <Td>
@@ -464,10 +419,7 @@ export default function VideoManagement() {
                         )}
                         <HStack mt={2} justify="space-between">
                           <Badge colorScheme="blue" fontSize="xs">
-                            {new Date(video.created_at).toLocaleDateString('id-ID')}
-                          </Badge>
-                          <Badge colorScheme="green" fontSize="xs">
-                            {video.view_count || 0} views
+                            {formatDate(video.created_at)}
                           </Badge>
                         </HStack>
                       </Box>

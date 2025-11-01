@@ -21,8 +21,15 @@ import {
   AlertIcon,
   Divider,
   SimpleGrid,
+  Spinner,
 } from '@chakra-ui/react';
-import { supabase } from '@/lib/supabase';
+import { 
+  doc, 
+  getDoc, 
+  setDoc,
+  updateDoc 
+} from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import AdminLayout from '@/components/AdminLayout';
 
 // Default settings
@@ -41,31 +48,39 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const toast = useToast();
 
+  // Firestore document reference untuk settings
+  const settingsDocRef = doc(db, 'app_settings', 'global_settings');
+
   // Fetch settings dengan useCallback untuk menghindari infinite loop
   const fetchSettings = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('app_settings')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+      const settingsDoc = await getDoc(settingsDocRef);
 
-      if (error) {
-        // Jika tabel tidak ada atau tidak ada data, gunakan default settings
-        if (error.code === 'PGRST116' || error.code === '42P01') {
-          console.log('Using default settings');
-          setAppSettings(defaultSettings);
-          return;
-        }
-        throw error;
-      }
-
-      if (data) {
+      if (settingsDoc.exists()) {
+        const settingsData = settingsDoc.data();
         setAppSettings({
           ...defaultSettings,
-          ...data
+          ...settingsData
+        });
+      } else {
+        // Jika dokumen belum ada, gunakan default settings
+        console.log('Settings document not found, using defaults');
+        setAppSettings(defaultSettings);
+        
+        // Buat dokumen settings dengan nilai default
+        await setDoc(settingsDocRef, {
+          ...defaultSettings,
+          created_at: new Date(),
+          updated_at: new Date()
+        });
+        
+        toast({
+          title: 'Settings Created',
+          description: 'Default settings created successfully',
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
         });
       }
     } catch (error) {
@@ -91,52 +106,10 @@ export default function Settings() {
   const handleSaveSettings = async () => {
     setSaving(true);
     try {
-      // Cek apakah settings sudah ada
-      const { data: existingSettings } = await supabase
-        .from('app_settings')
-        .select('id')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-
-      let error;
-      
-      if (existingSettings?.id) {
-        // Update existing settings
-        const { error: updateError } = await supabase
-          .from('app_settings')
-          .update({
-            ...appSettings,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingSettings.id);
-        error = updateError;
-      } else {
-        // Insert new settings
-        const { error: insertError } = await supabase
-          .from('app_settings')
-          .insert([{
-            ...appSettings,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }]);
-        error = insertError;
-      }
-
-      if (error) {
-        // Jika tabel belum ada, tampilkan pesan
-        if (error.code === '42P01') {
-          toast({
-            title: 'Tabel belum dibuat',
-            description: 'Silakan buat tabel app_settings di Supabase terlebih dahulu',
-            status: 'warning',
-            duration: 6000,
-            isClosable: true,
-          });
-          return;
-        }
-        throw error;
-      }
+      await updateDoc(settingsDocRef, {
+        ...appSettings,
+        updated_at: new Date()
+      });
 
       toast({
         title: 'Berhasil',
@@ -147,13 +120,42 @@ export default function Settings() {
       });
     } catch (error) {
       console.error('Error saving settings:', error);
-      toast({
-        title: 'Error',
-        description: 'Gagal menyimpan pengaturan: ' + error.message,
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
+      
+      // Jika dokumen belum ada, buat baru
+      if (error.code === 'not-found') {
+        try {
+          await setDoc(settingsDocRef, {
+            ...appSettings,
+            created_at: new Date(),
+            updated_at: new Date()
+          });
+          
+          toast({
+            title: 'Berhasil',
+            description: 'Pengaturan berhasil dibuat',
+            status: 'success',
+            duration: 3000,
+            isClosable: true,
+          });
+        } catch (createError) {
+          console.error('Error creating settings:', createError);
+          toast({
+            title: 'Error',
+            description: 'Gagal membuat pengaturan: ' + createError.message,
+            status: 'error',
+            duration: 5000,
+            isClosable: true,
+          });
+        }
+      } else {
+        toast({
+          title: 'Error',
+          description: 'Gagal menyimpan pengaturan: ' + error.message,
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        });
+      }
     } finally {
       setSaving(false);
     }
@@ -186,13 +188,71 @@ export default function Settings() {
     }
   };
 
+  const exportSettings = () => {
+    const settingsJson = JSON.stringify(appSettings, null, 2);
+    const blob = new Blob([settingsJson], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'cekhealth-settings.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    toast({
+      title: 'Berhasil',
+      description: 'Pengaturan berhasil di-export',
+      status: 'success',
+      duration: 3000,
+      isClosable: true,
+    });
+  };
+
+  const importSettings = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const importedSettings = JSON.parse(e.target.result);
+        setAppSettings(prev => ({
+          ...prev,
+          ...importedSettings
+        }));
+        
+        toast({
+          title: 'Berhasil',
+          description: 'Pengaturan berhasil di-import',
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
+      } catch (error) {
+        toast({
+          title: 'Error',
+          description: 'File tidak valid',
+          status: 'error',
+          duration: 3000,
+          isClosable: true,
+        });
+      }
+    };
+    reader.readAsText(file);
+    
+    // Reset input file
+    event.target.value = '';
+  };
+
   if (loading) {
     return (
       <AdminLayout>
         <Container maxW="container.xl" py={8}>
-          <Box textAlign="center">
-            <Text>Memuat pengaturan...</Text>
-          </Box>
+          <VStack spacing={4} align="center" justify="center" minH="400px">
+            <Spinner size="xl" color="purple.500" thickness="3px" />
+            <Text color="gray.600">Memuat pengaturan...</Text>
+          </VStack>
         </Container>
       </AdminLayout>
     );
@@ -304,6 +364,40 @@ export default function Settings() {
 
                   <Divider />
 
+                  {/* Import/Export Section */}
+                  <Box w="full">
+                    <Heading size="sm" color="blue.600" mb={4}>
+                      Backup & Restore
+                    </Heading>
+                    <HStack spacing={3}>
+                      <Button
+                        colorScheme="blue"
+                        variant="outline"
+                        onClick={exportSettings}
+                        flex={1}
+                      >
+                        Export Settings
+                      </Button>
+                      <Input
+                        type="file"
+                        accept=".json"
+                        onChange={importSettings}
+                        display="none"
+                        id="import-settings"
+                      />
+                      <Button
+                        colorScheme="blue"
+                        variant="outline"
+                        onClick={() => document.getElementById('import-settings').click()}
+                        flex={1}
+                      >
+                        Import Settings
+                      </Button>
+                    </HStack>
+                  </Box>
+
+                  <Divider />
+
                   {/* Reset Section */}
                   <Box w="full">
                     <Heading size="sm" color="orange.600" mb={4}>
@@ -366,7 +460,7 @@ export default function Settings() {
           {/* Save Button */}
           <Card>
             <CardBody>
-              <HStack justify="space-between">
+              <HStack justify="space-between" flexDir={{ base: 'column', md: 'row' }} gap={4}>
                 <Box>
                   <Text fontWeight="bold">Simpan Perubahan</Text>
                   <Text fontSize="sm" color="gray.600">
@@ -385,6 +479,7 @@ export default function Settings() {
                     isLoading={saving}
                     onClick={handleSaveSettings}
                     size="lg"
+                    loadingText="Menyimpan..."
                   >
                     Simpan Pengaturan
                   </Button>

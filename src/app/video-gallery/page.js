@@ -24,9 +24,16 @@ import {
   HStack,
   Icon,
   Image,
+  Spinner,
 } from "@chakra-ui/react";
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { 
+  collection, 
+  getDocs, 
+  query, 
+  orderBy 
+} from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { FiYoutube, FiVideo, FiRefreshCw, FiPlay } from 'react-icons/fi';
 
 export default function VideoGallery() {
@@ -46,23 +53,24 @@ export default function VideoGallery() {
       setLoading(true);
       setError(null);
       
-      console.log('🔄 Fetching videos from database...');
+      console.log('🔄 Fetching videos from Firestore...');
       
-      const { data, error } = await supabase
-        .from('videos')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const videosQuery = query(
+        collection(db, 'videos'), 
+        orderBy('created_at', 'desc')
+      );
+      
+      const querySnapshot = await getDocs(videosQuery);
+      const videosData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
 
-      if (error) {
-        console.error('❌ Error fetching videos:', error);
-        throw error;
-      }
-
-      console.log('✅ Videos fetched:', data);
-      setVideos(data || []);
+      console.log('✅ Videos fetched:', videosData.length);
+      setVideos(videosData);
       
     } catch (error) {
-      console.error('🎯 Failed to fetch videos:', error);
+      console.error('❌ Error fetching videos:', error);
       setError('Gagal memuat video. Silakan refresh halaman.');
     } finally {
       setLoading(false);
@@ -86,16 +94,13 @@ export default function VideoGallery() {
         let videoId = '';
         
         if (url.includes('youtu.be')) {
-          // Format: https://youtu.be/VIDEO_ID
           videoId = url.split('/').pop()?.split('?')[0];
         } else if (url.includes('youtube.com')) {
-          // Format: https://www.youtube.com/watch?v=VIDEO_ID
           const urlObj = new URL(url);
           videoId = urlObj.searchParams.get('v');
         }
         
         if (videoId) {
-          // Gunakan maxresdefault untuk kualitas tertinggi
           return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
         }
       }
@@ -126,7 +131,6 @@ export default function VideoGallery() {
       }
     }
     
-    // Untuk video upload, gunakan URL langsung
     return video.video_url;
   };
 
@@ -138,7 +142,6 @@ export default function VideoGallery() {
     return videoType === 'youtube' ? 'red' : 'blue';
   };
 
-  // Fallback untuk thumbnail jika maxresdefault tidak tersedia
   const handleThumbnailError = (video, event) => {
     console.log('🔄 Falling back to lower quality thumbnail for:', video.title);
     
@@ -157,12 +160,21 @@ export default function VideoGallery() {
       }
       
       if (videoId) {
-        // Coba hqdefault jika maxresdefault tidak ada
         event.target.src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
       }
     } else {
       event.target.src = '/images/video-placeholder.jpg';
     }
+  };
+
+  const formatDate = (timestamp) => {
+    if (!timestamp) return 'N/A';
+    
+    if (timestamp.toDate) {
+      return timestamp.toDate().toLocaleDateString('id-ID');
+    }
+    
+    return new Date(timestamp).toLocaleDateString('id-ID');
   };
 
   if (loading) {
@@ -293,7 +305,7 @@ export default function VideoGallery() {
                       bg="black"
                       opacity="0"
                       transition="opacity 0.3s"
-                      _groupHover={{ opacity: 0.2 }}
+                      _hover={{ opacity: 0.2 }}
                       display="flex"
                       alignItems="center"
                       justifyContent="center"
@@ -336,31 +348,6 @@ export default function VideoGallery() {
                         {video.video_type === 'youtube' ? 'YouTube' : 'Video'}
                       </Badge>
                     </Box>
-
-                    {/* Hover Play Button */}
-                    <Box
-                      position="absolute"
-                      top="50%"
-                      left="50%"
-                      transform="translate(-50%, -50%)"
-                      opacity="0"
-                      transition="all 0.3s"
-                      _groupHover={{ opacity: 1 }}
-                    >
-                      <Box
-                        bg="rgba(0,0,0,0.8)"
-                        color="white"
-                        borderRadius="50%"
-                        width="70px"
-                        height="70px"
-                        display="flex"
-                        alignItems="center"
-                        justifyContent="center"
-                        border="3px solid white"
-                      >
-                        <Icon as={FiPlay} boxSize={8} color="white" ml={1} />
-                      </Box>
-                    </Box>
                   </Box>
                   
                   {/* Video Info */}
@@ -377,7 +364,7 @@ export default function VideoGallery() {
                     
                     <HStack justify="space-between" fontSize="xs" color="gray.500">
                       <Text>
-                        {new Date(video.created_at).toLocaleDateString('id-ID')}
+                        {formatDate(video.created_at)}
                       </Text>
                       <Badge colorScheme="purple" variant="subtle">
                         Edukasi
@@ -453,12 +440,7 @@ export default function VideoGallery() {
                 <HStack mt={4} fontSize="sm" color="gray.500">
                   <Text>Ditambahkan pada:</Text>
                   <Text fontWeight="medium">
-                    {new Date(selectedVideo.created_at).toLocaleDateString('id-ID', {
-                      weekday: 'long',
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric'
-                    })}
+                    {formatDate(selectedVideo.created_at)}
                   </Text>
                 </HStack>
               </>

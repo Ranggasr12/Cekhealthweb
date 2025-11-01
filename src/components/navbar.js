@@ -29,7 +29,17 @@ import {
 import { usePathname, useRouter } from 'next/navigation';
 import { HamburgerIcon, ChevronDownIcon } from '@chakra-ui/icons';
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { 
+  onAuthStateChanged, 
+  signOut,
+  getAuth 
+} from 'firebase/auth';
+import { 
+  doc, 
+  getDoc, 
+  setDoc 
+} from 'firebase/firestore';
+import { auth, db } from "@/lib/firebase";
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -40,7 +50,6 @@ export default function Navbar() {
   const [user, setUser] = useState(null);
   const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [isMockMode, setIsMockMode] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   const navItems = [
@@ -58,26 +67,82 @@ export default function Navbar() {
     setMounted(true);
   }, []);
 
-  // Function untuk redirect berdasarkan role
-  const redirectBasedOnRole = async (user) => {
+  // Function untuk mendapatkan atau membuat user profile
+  const getUserProfile = async (userId) => {
     try {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("user_id", user.id)  // ✅ FIXED: gunakan user_id
-        .single();
+      const userDocRef = doc(db, 'users', userId);
+      const userDoc = await getDoc(userDocRef);
 
+      if (userDoc.exists()) {
+        return userDoc.data();
+      } else {
+        // Jika profile tidak ditemukan, buat baru
+        console.log("📝 Profile not found, creating automatically...");
+        return await createUserProfile(userId);
+      }
+    } catch (error) {
+      console.error("❌ Error getting profile:", error);
+      return null;
+    }
+  };
+
+  // Function untuk membuat profile user baru
+  const createUserProfile = async (userId) => {
+    try {
+      const currentUser = auth.currentUser;
+      const email = currentUser?.email || '';
+      const displayName = currentUser?.displayName || email.split('@')[0] || 'User';
+
+      const userData = {
+        email: email,
+        full_name: displayName,
+        role: 'user',
+        created_at: new Date(),
+        updated_at: new Date()
+      };
+
+      await setDoc(doc(db, 'users', userId), userData);
+
+      console.log("✅ Auto-created profile for user:", userId);
+      return userData;
+    } catch (error) {
+      console.error("❌ Error creating profile:", error);
+      // Return default profile
+      return {
+        role: 'user',
+        full_name: 'User',
+        email: auth.currentUser?.email || ''
+      };
+    }
+  };
+
+  // Function untuk update role user
+  const updateUserRole = async (userId, newRole) => {
+    try {
+      const userDocRef = doc(db, 'users', userId);
+      await setDoc(userDocRef, {
+        role: newRole,
+        updated_at: new Date()
+      }, { merge: true });
+
+      console.log("✅ Database updated to admin role");
+      return true;
+    } catch (error) {
+      console.error("❌ Error updating admin role:", error);
+      return false;
+    }
+  };
+
+  // Function untuk redirect protection (hanya untuk halaman admin)
+  const checkAdminAccess = async (user) => {
+    try {
+      const profile = await getUserProfile(user.uid);
       const userRole = profile?.role || 'user';
       
-      console.log('🔀 Redirect check - Role:', userRole, 'Current path:', pathname);
+      console.log('🔐 Access check - Role:', userRole, 'Current path:', pathname);
       
-      // Jika admin dan sedang di halaman utama, redirect ke admin dashboard
-      if (userRole === 'admin' && (pathname === '/' || pathname === '/home')) {
-        console.log('🚀 Redirecting admin to dashboard');
-        router.push('/admin/dashboard');
-      }
-      // Jika user biasa dan sedang di halaman admin, redirect ke home
-      else if (userRole === 'user' && pathname.startsWith('/admin')) {
+      // Hanya redirect jika user biasa mencoba akses halaman admin
+      if (userRole === 'user' && pathname.startsWith('/admin')) {
         console.log('🔒 Redirecting user to home - Access denied');
         router.push('/');
         
@@ -88,149 +153,83 @@ export default function Navbar() {
           status: "error",
           duration: 3000,
         });
+        return false;
       }
+      
+      return true;
     } catch (error) {
-      console.error('❌ Error redirecting:', error);
+      console.error('❌ Error checking access:', error);
+      return true;
     }
   };
 
   useEffect(() => {
     if (!mounted) return;
 
-    loadUserData();
-
-    // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('🔐 Auth state changed:', event);
-        if (event === 'SIGNED_IN' && session) {
-          console.log('✅ User signed in:', session.user.email);
-          await loadUserData();
-          
-          // Redirect berdasarkan role setelah login
-          setTimeout(() => {
-            redirectBasedOnRole(session.user);
-          }, 1000);
-          
-        } else if (event === 'SIGNED_OUT') {
-          console.log('🔒 User signed out');
-          setUser(null);
-          setRole(null);
-          setLoading(false);
-        }
-      }
-    );
-
-    return () => subscription.unsubscribe();
-  }, [pathname, mounted]);
-
-  const loadUserData = async () => {
-    try {
-      console.log('🔄 Loading user data...');
+    // Firebase Auth State Listener
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setLoading(true);
       
-      const { data: { session }, error } = await supabase.auth.getSession();
-      
-      if (error) {
-        console.error("❌ Session error:", error);
-        return;
-      }
-
-      // Check if we're in mock mode
-      const isMock = !process.env.NEXT_PUBLIC_SUPABASE_URL || 
-                    process.env.NEXT_PUBLIC_SUPABASE_URL.includes('mock-url');
-      setIsMockMode(isMock);
-      
-      if (session?.user) {
-        setUser(session.user);
-        console.log("✅ User session found:", session.user.email);
-
-        // Try to get user profile from database
+      if (user) {
+        console.log('✅ User signed in:', user.email);
+        setUser(user);
+        
         try {
-          // ✅ PERBAIKAN: Gunakan user_id bukan id
-          const { data: profile, error: profileError } = await supabase
-            .from("profiles")
-            .select("role, full_name")
-            .eq("user_id", session.user.id)  // ✅ FIXED
-            .single();
-
+          // Get user profile from Firestore
+          const profile = await getUserProfile(user.uid);
+          
           console.log("📊 Profile query result:", { 
             hasProfile: !!profile, 
-            profileError: profileError?.message,
-            userId: session.user.id 
+            userId: user.uid 
           });
 
-          if (!profileError && profile) {
-            // Role dari database
+          if (profile) {
+            // Role dari Firestore
             setRole(profile.role);
-            console.log("🎯 Role from database:", profile.role);
+            console.log("🎯 Role from Firestore:", profile.role);
           } else {
-            // Jika profile tidak ditemukan, buat otomatis
-            console.log("🔄 Profile not found, creating automatically...");
-            
-            // ✅ PERBAIKAN: Gunakan user_id bukan id
-            const { error: insertError } = await supabase
-              .from('profiles')
-              .insert({
-                user_id: session.user.id,  // ✅ FIXED
-                email: session.user.email,
-                role: 'user',
-                full_name: session.user.email.split('@')[0],
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-              });
-
-            if (!insertError) {
-              console.log("✅ Auto-created profile");
-              setRole('user');
-            } else {
-              console.error("❌ Failed to create profile:", insertError);
-              // Fallback ke user role jika gagal create
-              setRole('user');
-            }
+            setRole('user');
           }
 
           // 🚨 AUTO-ADMIN untuk email tertentu
           const adminEmails = [
             'admin@cekhealth.com', 
-            'admin@example.com'
+            'admin@example.com',
+            'ranggasr1223@gmail.com'
           ];
           
-          if (adminEmails.includes(session.user.email.toLowerCase())) {
-            console.log("🚨 AUTO-ADMIN: Hard coding admin role for:", session.user.email);
+          if (adminEmails.includes(user.email?.toLowerCase())) {
+            console.log("🚨 AUTO-ADMIN: Hard coding admin role for:", user.email);
             setRole('admin');
             
-            // Update database juga jika perlu
-            const { error: updateError } = await supabase
-              .from('profiles')
-              .update({ role: 'admin' })
-              .eq('user_id', session.user.id);  // ✅ FIXED
-              
-            if (!updateError) {
-              console.log("✅ Database updated to admin role");
-            } else {
-              console.error("❌ Failed to update admin role:", updateError);
-            }
+            // Update Firestore juga jika perlu
+            await updateUserRole(user.uid, 'admin');
           }
+          
+          // Check admin access protection (hanya untuk halaman admin)
+          await checkAdminAccess(user);
           
         } catch (profileError) {
           console.error("❌ Profile error:", profileError);
-          // Fallback ke user role jika ada error
           setRole("user");
         }
       } else {
+        console.log('🔒 User signed out');
         setUser(null);
         setRole(null);
-        console.log("🔒 No active session");
+        
+        // Redirect jika user logout di halaman admin
+        if (pathname.startsWith('/admin')) {
+          console.log('🔒 User logged out from admin page, redirecting to home');
+          router.push('/');
+        }
       }
-    } catch (error) {
-      console.error("❌ Error loading user:", error);
-      setIsMockMode(true);
-      // Fallback ke guest role jika ada error besar
-      setRole('guest');
-    } finally {
+      
       setLoading(false);
-    }
-  };
+    });
+
+    return () => unsubscribe();
+  }, [pathname, mounted]);
 
   const handleLogout = async () => {
     try {
@@ -240,21 +239,10 @@ export default function Navbar() {
       setUser(null);
       setRole(null);
       
-      // Try to sign out from Supabase
-      const { error } = await supabase.auth.signOut();
+      // Sign out from Firebase
+      await signOut(auth);
       
-      if (error) {
-        console.log('⚠️ Supabase logout error, clearing local data:', error.message);
-        // Continue dengan clear local data meskipun ada error
-      }
-
-      console.log('✅ Logout process completed');
-      
-      // Clear any cached data
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('supabase.auth.token');
-        sessionStorage.clear();
-      }
+      console.log('✅ Firebase logout successful');
       
       // Show success message
       toast({
@@ -267,11 +255,6 @@ export default function Navbar() {
       // Redirect to home
       router.push('/');
       onClose();
-      
-      // Force reload to clear all state
-      setTimeout(() => {
-        window.location.href = '/';
-      }, 1000);
       
     } catch (error) {
       console.error("❌ Logout error:", error);
@@ -289,11 +272,6 @@ export default function Navbar() {
       
       router.push('/');
       onClose();
-      
-      // Force reload
-      setTimeout(() => {
-        window.location.href = '/';
-      }, 500);
     }
   };
 
@@ -319,12 +297,12 @@ export default function Navbar() {
 
   const getDisplayName = () => {
     if (!user) return 'User';
-    return user.email?.split('@')[0] || 'User';
+    return user.displayName || user.email?.split('@')[0] || 'User';
   };
 
   const getAvatarInitial = () => {
     if (!user) return 'U';
-    return user.email?.[0]?.toUpperCase() || 'U';
+    return user.displayName?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || 'U';
   };
 
   // Jangan render apa-apa sampai component mounted di client
@@ -401,11 +379,6 @@ export default function Navbar() {
               loading="eager"
             />
           </Link>
-          {isMockMode && (
-            <Badge colorScheme="yellow" ml={2} fontSize="xs">
-              Demo Mode
-            </Badge>
-          )}
         </Flex>
 
         {/* Desktop Navigation */}
@@ -442,12 +415,6 @@ export default function Navbar() {
 
         {/* Desktop Auth Section */}
         <HStack spacing={3} display={{ base: "none", md: "flex" }}>
-          {isMockMode && (
-            <Badge colorScheme="yellow" fontSize="xs" variant="subtle">
-              Demo
-            </Badge>
-          )}
-          
           {loading ? (
             <Spinner size="sm" color="purple.500" />
           ) : user ? (
@@ -566,11 +533,6 @@ export default function Navbar() {
           <DrawerHeader borderBottomWidth="1px">
             <Flex align="center" justify="space-between">
               <Text fontSize="lg" fontWeight="bold">Menu</Text>
-              {isMockMode && (
-                <Badge colorScheme="yellow" fontSize="xs">
-                  Demo Mode
-                </Badge>
-              )}
             </Flex>
           </DrawerHeader>
           
@@ -708,7 +670,6 @@ export default function Navbar() {
                   <Text fontWeight="bold">Debug Info:</Text>
                   <Text>User: {user ? user.email : 'Not logged in'}</Text>
                   <Text>Role: {role || 'Not set'}</Text>
-                  <Text>Mock Mode: {isMockMode ? 'Yes' : 'No'}</Text>
                   <Text>Current Path: {pathname}</Text>
                 </Box>
               )}

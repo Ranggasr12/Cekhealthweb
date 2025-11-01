@@ -24,7 +24,15 @@ import {
   SkeletonText
 } from '@chakra-ui/react';
 import { useRouter, usePathname } from 'next/navigation';
-import { supabase, getProfile, getSession } from '@/lib/supabase';
+import { 
+  signOut,
+  onAuthStateChanged
+} from 'firebase/auth';
+import { auth, db } from '@/lib/firebase';
+import { 
+  doc,
+  getDoc
+} from 'firebase/firestore';
 import { 
   FiHome, 
   FiHelpCircle, 
@@ -54,27 +62,44 @@ export default function AdminLayout({ children }) {
 
   useEffect(() => {
     setMounted(true);
-    loadUserData();
-  }, []);
-
-  const loadUserData = async () => {
-    try {
+    
+    // Firebase Auth State Listener
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setLoading(true);
-      const { data: { session } } = await getSession();
-      setUser(session?.user);
-
-      if (session?.user) {
-        const { data: profileData, error } = await getProfile(session.user.id);
-        if (!error && profileData) {
-          setProfile(profileData);
+      if (user) {
+        setUser(user);
+        // Load user profile from Firestore
+        try {
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          if (userDoc.exists()) {
+            setProfile(userDoc.data());
+          } else {
+            // Default profile jika belum ada
+            setProfile({
+              full_name: user.displayName || user.email.split('@')[0],
+              email: user.email,
+              role: 'admin'
+            });
+          }
+        } catch (error) {
+          console.error('Error loading profile:', error);
+          setProfile({
+            full_name: user.displayName || user.email.split('@')[0],
+            email: user.email,
+            role: 'admin'
+          });
         }
+      } else {
+        setUser(null);
+        setProfile(null);
+        // Redirect to login if not authenticated
+        router.push('/login');
       }
-    } catch (error) {
-      console.error('Error loading user data:', error);
-    } finally {
       setLoading(false);
-    }
-  };
+    });
+
+    return () => unsubscribe();
+  }, [router]);
 
   const menuItems = [
     { 
@@ -105,7 +130,7 @@ export default function AdminLayout({ children }) {
 
   const handleLogout = async () => {
     try {
-      await supabase.auth.signOut();
+      await signOut(auth);
       router.push('/');
     } catch (error) {
       console.error('Logout error:', error);
@@ -161,7 +186,7 @@ export default function AdminLayout({ children }) {
         <Avatar
           size="sm"
           name={profile?.full_name || user.email}
-          src={profile?.avatar_url || ''}
+          src={profile?.photoURL || ''}
           bg="purple.500"
           color="white"
           border="2px solid"
@@ -174,7 +199,7 @@ export default function AdminLayout({ children }) {
             color="purple.700"
             noOfLines={1}
           >
-            {profile?.full_name || 'User'}
+            {profile?.full_name || user.displayName || user.email}
           </Text>
           <Text 
             fontSize="xs" 
@@ -396,9 +421,9 @@ export default function AdminLayout({ children }) {
 
       {/* Main Content Area */}
       <Box 
-        ml={{ base: 0, md: "110px" }} // Diperbaiki: harus sama dengan width sidebar
+        ml={{ base: 0, md: "220px" }}
         minH="100vh"
-        w={{ base: "100%", md: "calc(100% - 160px)" }}
+        w={{ base: "100%", md: "calc(100% - 220px)" }}
         px={{ base: 3, md: 6 }}
         py={4}
         pt={{ base: 12, md: 4 }}
