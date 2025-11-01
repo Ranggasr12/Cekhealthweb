@@ -2,7 +2,6 @@ import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
-// Firebase configuration
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -13,21 +12,30 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
-// Initialize Firebase only on client side
+// Safe initialization with error handling
 let app;
 let auth;
 let db;
 
 if (typeof window !== 'undefined') {
-  // Client-side
-  app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  db = getFirestore(app);
-} else {
-  // Server-side - use mock or empty objects
-  app = {};
-  auth = {};
-  db = {};
+  try {
+    // Check if all required config values are present
+    const isConfigValid = 
+      firebaseConfig.apiKey && 
+      firebaseConfig.authDomain && 
+      firebaseConfig.projectId;
+    
+    if (isConfigValid) {
+      app = initializeApp(firebaseConfig);
+      auth = getAuth(app);
+      db = getFirestore(app);
+      console.log('Firebase initialized successfully');
+    } else {
+      console.warn('Firebase config is incomplete');
+    }
+  } catch (error) {
+    console.error('Firebase initialization failed:', error);
+  }
 }
 
 export { auth, db };
