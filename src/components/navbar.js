@@ -23,22 +23,11 @@ import {
   MenuList,
   MenuItem,
   MenuDivider,
-  Badge,
   useToast
 } from "@chakra-ui/react";
 import { usePathname, useRouter } from 'next/navigation';
 import { HamburgerIcon, ChevronDownIcon } from '@chakra-ui/icons';
 import { useEffect, useState } from "react";
-import { 
-  onAuthStateChanged, 
-  signOut,
-  getAuth 
-} from 'firebase/auth';
-import { 
-  doc, 
-  getDoc, 
-  setDoc 
-} from 'firebase/firestore';
 import { auth, db } from "@/lib/firebase";
 
 export default function Navbar() {
@@ -67,11 +56,50 @@ export default function Navbar() {
     setMounted(true);
   }, []);
 
+  // Safe Firebase operations dengan error handling
+  const safeGetDoc = async (docRef) => {
+    try {
+      const { getDoc } = await import('firebase/firestore');
+      return await getDoc(docRef);
+    } catch (error) {
+      console.error('❌ Error in getDoc:', error);
+      return { exists: false, data: () => null };
+    }
+  };
+
+  const safeSetDoc = async (docRef, data) => {
+    try {
+      const { setDoc } = await import('firebase/firestore');
+      return await setDoc(docRef, data);
+    } catch (error) {
+      console.error('❌ Error in setDoc:', error);
+      return null;
+    }
+  };
+
+  const safeOnAuthStateChanged = (auth, callback) => {
+    if (!auth || typeof auth.onAuthStateChanged !== 'function') {
+      console.warn('⚠️ Auth not available, using mock auth state');
+      callback(null);
+      return () => {}; // Return empty unsubscribe function
+    }
+    return auth.onAuthStateChanged(callback);
+  };
+
+  const safeSignOut = async (auth) => {
+    if (!auth || typeof auth.signOut !== 'function') {
+      console.warn('⚠️ Auth signOut not available');
+      return;
+    }
+    return await auth.signOut();
+  };
+
   // Function untuk mendapatkan atau membuat user profile
   const getUserProfile = async (userId) => {
     try {
+      const { doc } = await import('firebase/firestore');
       const userDocRef = doc(db, 'users', userId);
-      const userDoc = await getDoc(userDocRef);
+      const userDoc = await safeGetDoc(userDocRef);
 
       if (userDoc.exists()) {
         return userDoc.data();
@@ -89,7 +117,8 @@ export default function Navbar() {
   // Function untuk membuat profile user baru
   const createUserProfile = async (userId) => {
     try {
-      const currentUser = auth.currentUser;
+      const { doc } = await import('firebase/firestore');
+      const currentUser = auth?.currentUser;
       const email = currentUser?.email || '';
       const displayName = currentUser?.displayName || email.split('@')[0] || 'User';
 
@@ -101,7 +130,8 @@ export default function Navbar() {
         updated_at: new Date()
       };
 
-      await setDoc(doc(db, 'users', userId), userData);
+      const userDocRef = doc(db, 'users', userId);
+      await safeSetDoc(userDocRef, userData);
 
       console.log("✅ Auto-created profile for user:", userId);
       return userData;
@@ -111,7 +141,7 @@ export default function Navbar() {
       return {
         role: 'user',
         full_name: 'User',
-        email: auth.currentUser?.email || ''
+        email: auth?.currentUser?.email || ''
       };
     }
   };
@@ -119,8 +149,9 @@ export default function Navbar() {
   // Function untuk update role user
   const updateUserRole = async (userId, newRole) => {
     try {
+      const { doc } = await import('firebase/firestore');
       const userDocRef = doc(db, 'users', userId);
-      await setDoc(userDocRef, {
+      await safeSetDoc(userDocRef, {
         role: newRole,
         updated_at: new Date()
       }, { merge: true });
@@ -166,8 +197,10 @@ export default function Navbar() {
   useEffect(() => {
     if (!mounted) return;
 
-    // Firebase Auth State Listener
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    console.log('🔄 Setting up auth state listener...');
+    
+    // Firebase Auth State Listener dengan error handling
+    const unsubscribe = safeOnAuthStateChanged(auth, async (user) => {
       setLoading(true);
       
       if (user) {
@@ -228,7 +261,13 @@ export default function Navbar() {
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    // Cleanup subscription
+    return () => {
+      console.log('🧹 Cleaning up auth listener');
+      if (unsubscribe && typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
   }, [pathname, mounted]);
 
   const handleLogout = async () => {
@@ -240,7 +279,7 @@ export default function Navbar() {
       setRole(null);
       
       // Sign out from Firebase
-      await signOut(auth);
+      await safeSignOut(auth);
       
       console.log('✅ Firebase logout successful');
       
@@ -663,16 +702,6 @@ export default function Navbar() {
                   </VStack>
                 )}
               </Box>
-
-              {/* Debug Info - Hanya di development */}
-              {process.env.NODE_ENV === 'development' && (
-                <Box p={3} bg="gray.50" borderRadius="md" fontSize="xs">
-                  <Text fontWeight="bold">Debug Info:</Text>
-                  <Text>User: {user ? user.email : 'Not logged in'}</Text>
-                  <Text>Role: {role || 'Not set'}</Text>
-                  <Text>Current Path: {pathname}</Text>
-                </Box>
-              )}
             </VStack>
           </DrawerBody>
         </DrawerContent>

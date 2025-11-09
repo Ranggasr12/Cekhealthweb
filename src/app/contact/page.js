@@ -429,17 +429,6 @@ export default function ContactPage() {
                       </Box>
                     </HStack>
 
-                    <HStack spacing={4}>
-                      <Box p={3} bg="purple.100" borderRadius="lg">
-                        <Icon as={PhoneIcon} w={6} h={6} color="purple.600" />
-                      </Box>
-                      <Box>
-                        <Text fontWeight="bold" color="purple.700" fontSize="lg">Telepon/WhatsApp</Text>
-                        <Text color="gray.600" fontSize="md">+62 21 1234 5678</Text>
-                        <Text color="gray.500" fontSize="sm">Senin - Jumat, 08:00-16:00</Text>
-                      </Box>
-                    </HStack>
-
                     <HStack spacing={4} align="start">
                       <Box p={3} bg="purple.100" borderRadius="lg" mt={1}>
                         <Icon as={LocationIcon} w={6} h={6} color="purple.600" />
@@ -482,32 +471,7 @@ export default function ContactPage() {
                   </VStack>
                 </CardBody>
               </Card>
-
-              {/* WhatsApp Direct Contact */}
-              <Card w="100%" borderRadius="xl" boxShadow="lg" bg="green.50" border="1px" borderColor="green.200">
-                <CardBody p={6}>
-                  <VStack spacing={3} align="start">
-                    <Heading size="md" color="green.700">
-                      💬 Hubungi Langsung via WhatsApp
-                    </Heading>
-                    <Text color="green.700" fontSize="sm">
-                      Untuk respon lebih cepat, silakan hubungi kami langsung melalui WhatsApp:
-                    </Text>
-                    <Button
-                      as="a"
-                      href="https://wa.me/622112345678"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      colorScheme="whatsapp"
-                      size="lg"
-                      w="100%"
-                    >
-                      Chat via WhatsApp
-                    </Button>
-                  </VStack>
-                </CardBody>
-              </Card>
-
+              
               {/* Alternative Contact Methods */}
               <Card w="100%" borderRadius="xl" boxShadow="lg" bg="orange.50" border="1px" borderColor="orange.200">
                 <CardBody p={6}>
@@ -520,7 +484,6 @@ export default function ContactPage() {
                     </Text>
                     <VStack spacing={2} align="start" w="100%">
                       <Text fontSize="sm">• Email langsung: cekhealthv1@gmail.com</Text>
-                      <Text fontSize="sm">• Telepon: +62 21 1234 5678</Text>
                       <Text fontSize="sm">• Kunjungi kampus langsung</Text>
                     </VStack>
                   </VStack>

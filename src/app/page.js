@@ -129,7 +129,7 @@ export default function Home() {
         overflow="hidden"
         bgGradient={bgGradient}
       >
-        {/* Background Wave dengan Gradient */}
+        {/* Background Wave dengan Gradient - DIPINDAHKAN KE BAWAH */}
         <Box
           position="absolute"
           bottom="0"
@@ -159,46 +159,44 @@ export default function Home() {
           />
         </Box>
 
-        {/* Dekorasi Circles */}
+        {/* Dekorasi Circles - DIKECILKAN DAN DIPINDAHKAN */}
         <Circle
-          size={{ base: "140px", md: "220px" }}
+          size={{ base: "100px", md: "160px" }}
           bgGradient="linear(45deg, purple.400 0%, purple.200 50%, pink.300 100%)"
-          opacity="0.3"
-          filter="blur(8px)"
-          position="absolute"
-          top={{ base: "15%", md: "20%" }}
-          right={{ base: "10%", md: "18%" }}
-          zIndex={0}
-        />
-
-        <Circle
-          size={{ base: "80px", md: "120px" }}
-          bgGradient="linear(135deg, pink.400 0%, purple.300 50%, blue.200 100%)"
-          opacity="0.25"
+          opacity="0.2"
           filter="blur(6px)"
           position="absolute"
-          bottom={{ base: "30%", md: "25%" }}
-          right={{ base: "20%", md: "35%" }}
+          top={{ base: "10%", md: "15%" }}
+          right={{ base: "5%", md: "10%" }}
           zIndex={0}
         />
 
-        {/* Konten utama - DITURUNKAN POSISINYA */}
+        <Circle
+          size={{ base: "60px", md: "80px" }}
+          bgGradient="linear(135deg, pink.400 0%, purple.300 50%, blue.200 100%)"
+          opacity="0.15"
+          filter="blur(4px)"
+          position="absolute"
+          top={{ base: "25%", md: "30%" }}
+          right={{ base: "15%", md: "25%" }}
+          zIndex={0}
+        />
+
+        {/* Konten utama - DINAIIKKAN KE ATAS */}
         <Flex
-          direction={{ base: "column", lg: "row" }}
+          direction="column"
           align="center"
-          justify="center"
+          justify="flex-start" // DIUBAH: dari center ke flex-start
           minH="100vh"
           w="100%"
           maxW="1400px"
           mx="auto"
-          px={{ base: 4, md: 6, lg: 20 }}
+          px={{ base: 6, md: 8, lg: 10 }}
           position="relative"
           zIndex={2}
-          // DITURUNKAN: margin top dikurangi atau dihapus
-          mt={{ base: "40px", md: "60px", lg: "80px" }} // DARI -60px MENJADI 40px
+          pt={{ base: "120px", md: "140px", lg: "160px" }} // DITAMBAHKAN: padding top untuk naik ke atas
         >
           <Box 
-            flex="1"
             zIndex={2}
             textAlign="center"
             w="100%"
@@ -206,8 +204,8 @@ export default function Home() {
           >
             <Heading
               as="h1"
-              size={{ base: "xl", md: "2xl", lg: "3xl" }}
-              mb={{ base: 3, md: 4 }}
+              size={{ base: "2xl", md: "3xl", lg: "4xl" }}
+              mb={{ base: 4, md: 5 }}
               color="purple.800"
               fontWeight="extrabold"
               lineHeight="1.1"
@@ -216,8 +214,8 @@ export default function Home() {
             </Heading>
             <Heading
               as="h2"
-              size={{ base: "lg", md: "xl", lg: "2xl" }}
-              mb={{ base: 4, md: 5 }}
+              size={{ base: "xl", md: "2xl", lg: "3xl" }}
+              mb={{ base: 6, md: 7 }}
               color="purple.500"
               fontWeight="extrabold"
               lineHeight="1.1"
@@ -226,9 +224,9 @@ export default function Home() {
             </Heading>
             <Text 
               color="gray.600" 
-              mb={{ base: 6, md: 8 }}
-              fontSize={{ base: "md", md: "lg" }}
-              lineHeight="1.5"
+              mb={{ base: 8, md: 10 }}
+              fontSize={{ base: "lg", md: "xl" }}
+              lineHeight="1.6"
               mx="auto"
               maxW="500px"
             >
@@ -236,13 +234,13 @@ export default function Home() {
             </Text>
             
             <Button
-              size={{ base: "md", md: "lg" }}
+              size={{ base: "lg", md: "xl" }}
               borderRadius="full"
-              px={{ base: 10, md: 12 }}
-              py={{ base: 6, md: 7 }}
+              px={{ base: 12, md: 14 }}
+              py={{ base: 7, md: 8 }}
               bgGradient="linear(to-r, purple.500, pink.500)"
               color="white"
-              fontSize={{ base: "lg", md: "xl" }}
+              fontSize={{ base: "xl", md: "2xl" }}
               fontWeight="bold"
               _hover={{
                 transform: "scale(1.05)",
@@ -254,9 +252,8 @@ export default function Home() {
               display="flex"
               alignItems="center"
               justifyContent="center"
-              minW={{ base: "160px", md: "180px" }}
-              minH={{ base: "52px", md: "60px" }}
-              mt={{ base: 2, md: 4 }}
+              minW={{ base: "200px", md: "220px" }}
+              minH={{ base: "60px", md: "70px" }}
             >
               Mulai Sekarang
             </Button>
