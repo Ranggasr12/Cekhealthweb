@@ -39,6 +39,7 @@ import {
   ModalBody,
   ModalCloseButton,
   useDisclosure,
+  Badge,
 } from "@chakra-ui/react";
 import { useRouter } from 'next/navigation';
 import { 
@@ -58,6 +59,13 @@ const ChevronLeftIcon = (props) => (
   <svg stroke="currentColor" fill="currentColor" strokeWidth="0" viewBox="0 0 24 24" height="1em" width="1em" {...props}>
     <path fill="none" d="M0 0h24v24H0z"></path>
     <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"></path>
+  </svg>
+);
+
+const ChevronRightIcon = (props) => (
+  <svg stroke="currentColor" fill="currentColor" strokeWidth="0" viewBox="0 0 24 24" height="1em" width="1em" {...props}>
+    <path fill="none" d="M0 0h24v24H0z"></path>
+    <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"></path>
   </svg>
 );
 
@@ -89,13 +97,12 @@ const PlayIcon = (props) => (
   </svg>
 );
 
-// Komponen untuk Rating Scale 1-10 - SEDERHANA TANPA WARNA DAN TULISAN
+// Komponen untuk Rating Scale 1-10
 const RatingScale = ({ value, onChange }) => {
   const numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
   return (
     <VStack spacing={4} w="100%">
-      {/* Number Grid - TAMPILAN BULAT TANPA WARNA */}
       <SimpleGrid columns={5} spacing={3} w="100%">
         {numbers.map((number) => (
           <Button
@@ -121,7 +128,7 @@ const RatingScale = ({ value, onChange }) => {
 // Komponen untuk YouTube Thumbnail Card
 const YouTubeThumbnailCard = ({ video, onPlay }) => {
   const getYouTubeId = (url) => {
-    const videoUrl = url || video.video_url;
+    const videoUrl = url || video.video_url || video.url;
     if (!videoUrl) return null;
     
     const patterns = [
@@ -156,7 +163,7 @@ const YouTubeThumbnailCard = ({ video, onPlay }) => {
           {thumbnailUrl ? (
             <Image 
               src={thumbnailUrl} 
-              alt={video.judul}
+              alt={video.judul || video.title}
               objectFit="cover"
             />
           ) : (
@@ -184,9 +191,11 @@ const YouTubeThumbnailCard = ({ video, onPlay }) => {
         </Box>
       </Box>
       <CardBody>
-        <Text fontWeight="bold" fontSize="lg" mb={2} noOfLines={2}>{video.judul}</Text>
+        <Text fontWeight="bold" fontSize="lg" mb={2} noOfLines={2}>
+          {video.judul || video.title || "Video Edukasi"}
+        </Text>
         <Text color="gray.600" fontSize="sm" mb={3} noOfLines={3}>
-          {video.deskripsi || "Video edukasi tentang kesehatan"}
+          {video.deskripsi || video.description || "Video edukasi tentang kesehatan"}
         </Text>
         {videoUrl && (
           <Button 
@@ -211,7 +220,7 @@ const YouTubeThumbnailCard = ({ video, onPlay }) => {
 // Komponen untuk Video Player Modal (POPUP)
 const VideoPlayerModal = ({ isOpen, onClose, video }) => {
   const getYouTubeEmbedUrl = (url) => {
-    const videoUrl = url || video?.video_url;
+    const videoUrl = url || video?.video_url || video?.url;
     if (!videoUrl) return '';
     
     const videoId = getYouTubeId(videoUrl);
@@ -240,7 +249,7 @@ const VideoPlayerModal = ({ isOpen, onClose, video }) => {
     <Modal isOpen={isOpen} onClose={onClose} size="6xl" isCentered>
       <ModalOverlay />
       <ModalContent>
-        <ModalHeader>{video.judul}</ModalHeader>
+        <ModalHeader>{video.judul || video.title}</ModalHeader>
         <ModalCloseButton />
         <ModalBody pb={6}>
           {embedUrl ? (
@@ -248,7 +257,7 @@ const VideoPlayerModal = ({ isOpen, onClose, video }) => {
               <Box 
                 as="iframe" 
                 src={embedUrl}
-                title={video.judul}
+                title={video.judul || video.title}
                 allowFullScreen
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               />
@@ -282,30 +291,78 @@ export default function FormPage() {
     jenisKelamin: '',
   });
   const [jawaban, setJawaban] = useState({});
+  
+  // State untuk multi-step berdasarkan penyakit
   const [currentStep, setCurrentStep] = useState(0);
+  const [groupedQuestions, setGroupedQuestions] = useState({});
+  const [diseaseSteps, setDiseaseSteps] = useState([]);
   const [progress, setProgress] = useState(0);
+
+  // State untuk navigasi hasil
+  const [currentResultIndex, setCurrentResultIndex] = useState(0);
 
   useEffect(() => {
     setIsClient(true);
     fetchPertanyaan();
   }, []);
 
-  // Fetch pertanyaan dari Firestore
+  // Fetch pertanyaan dari Firestore dan group by penyakit
   const fetchPertanyaan = async () => {
     try {
       setLoadingPertanyaan(true);
-      const q = query(collection(db, 'pertanyaan'), orderBy('created_at', 'asc'));
+      const q = query(
+        collection(db, 'pertanyaan'), 
+        orderBy('jenis_penyakit', 'asc'),
+        orderBy('urutan', 'asc')
+      );
       const querySnapshot = await getDocs(q);
       const pertanyaanData = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
+      
+      console.log('📋 SEMUA PERTANYAAN:', pertanyaanData);
+
+      // Group pertanyaan berdasarkan penyakit
+      const grouped = {};
+      pertanyaanData.forEach((q) => {
+        const penyakit = q.jenis_penyakit?.trim();
+        if (!penyakit) return;
+        
+        if (!grouped[penyakit]) {
+          grouped[penyakit] = [];
+        }
+        grouped[penyakit].push(q);
+      });
+
+      console.log('📊 HASIL GROUPING:', grouped);
+      setGroupedQuestions(grouped);
+      
+      // BUAT ARRAY PENYAKIT YANG SUDAH DIURUTKAN BERDASARKAN URUTAN
+      const penyakitList = Object.keys(grouped);
+      
+      // Urutkan penyakit berdasarkan field urutan dari pertanyaan pertama di setiap kelompok
+      const sortedPenyakitList = penyakitList.sort((a, b) => {
+        const urutanA = grouped[a][0]?.urutan || 999;
+        const urutanB = grouped[b][0]?.urutan || 999;
+        return urutanA - urutanB;
+      });
+
+      console.log('🎯 URUTAN PENYAKIT SETELAH DIURUTKAN:', sortedPenyakitList);
+      setDiseaseSteps(sortedPenyakitList);
+
+      console.log('📈 JUMLAH PERTANYAAN PER PENYAKIT:');
+      sortedPenyakitList.forEach((disease, index) => {
+        console.log(`   ${index + 1}. ${disease}: ${grouped[disease].length} pertanyaan (Urutan: ${grouped[disease][0]?.urutan || 'tidak ada'})`);
+      });
+
       setPertanyaan(pertanyaanData);
+      
     } catch (error) {
       console.error('Error fetching questions:', error);
       toast({
         title: 'Error',
-        description: 'Gagal memuat pertanyaan',
+        description: 'Gagal memuat pertanyaan: ' + error.message,
         status: 'error',
         duration: 5000,
       });
@@ -314,7 +371,7 @@ export default function FormPage() {
     }
   };
 
-  // Fetch materi penyakit
+  // Fetch materi penyakit - PERBAIKAN BESAR DI SINI
   const fetchMateriPenyakit = async (penyakitNames) => {
     if (penyakitNames.length === 0) return;
     
@@ -326,55 +383,66 @@ export default function FormPage() {
     
     setLoadingMateri(true);
     try {
+      console.log('🔍 Mencari materi untuk penyakit:', penyakitNames);
+      
       const q = query(collection(db, 'materi_penyakit'));
       const querySnapshot = await getDocs(q);
-      const materiData = querySnapshot.docs.map(doc => {
-        const data = {
-          id: doc.id,
-          ...doc.data()
-        };
-        
-        if (!data.url && data.video_url) {
-          data.url = data.video_url;
-        }
-        
-        return data;
-      });
+      const materiData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      console.log('📦 SEMUA MATERI DARI FIRESTORE:', materiData);
 
       const groupedMateri = {};
       
-      const fallbackMatches = {
-        'nutrisi makan': 'nutrisi',
-        'pencernaan': 'sistem pencernaan',
-        'gangguan pernafasan': 'sistem pernapasan', 
-        'gangguan istirahat tidur': 'istirahat tidur',
-        'perkemihan': 'sistem perkemihan',
-        'syaraf': 'persyarafan',
-        'saraf': 'persyarafan',
-        'kardiovaskuler': 'kardiovaskular'
-      };
-      
       penyakitNames.forEach(penyakit => {
-        const videosForPenyakit = materiData.filter(m => {
-          if (!m.nama_penyakit || m.jenis_materi !== 'video') {
-            return false;
-          }
+        console.log(`🔎 Mencari materi untuk: "${penyakit}"`);
+        
+        // Cari semua materi yang terkait dengan penyakit ini
+        const semuaMateri = materiData.filter(m => {
+          if (!m.nama_penyakit) return false;
           
+          // Normalisasi nama penyakit untuk matching yang lebih baik
           const materiPenyakitNormalized = m.nama_penyakit.toLowerCase().trim();
           const targetPenyakitNormalized = penyakit.toLowerCase().trim();
           
-          const exactMatch = materiPenyakitNormalized === targetPenyakitNormalized;
-          if (exactMatch) return true;
+          // Matching yang lebih fleksibel
+          const isMatch = materiPenyakitNormalized === targetPenyakitNormalized ||
+                         materiPenyakitNormalized.includes(targetPenyakitNormalized) ||
+                         targetPenyakitNormalized.includes(materiPenyakitNormalized);
           
-          const fallbackTarget = fallbackMatches[materiPenyakitNormalized];
-          const fallbackMatch = fallbackTarget === targetPenyakitNormalized;
+          if (isMatch) {
+            console.log(`✅ Ditemukan materi:`, m);
+          }
           
-          return fallbackMatch;
+          return isMatch;
         });
         
-        groupedMateri[penyakit] = { videos: videosForPenyakit || [] };
+        // Pisahkan video dan artikel
+        const videos = semuaMateri.filter(m => 
+          m.jenis_materi === 'video' || 
+          m.type === 'video' ||
+          (m.url && (m.url.includes('youtube') || m.url.includes('youtu.be')))
+        );
+        
+        const articles = semuaMateri.filter(m => 
+          m.jenis_materi === 'artikel' || 
+          m.type === 'article' ||
+          (!m.url || (!m.url.includes('youtube') && !m.url.includes('youtu.be')))
+        );
+
+        console.log(`🎬 Video untuk ${penyakit}:`, videos);
+        console.log(`📝 Artikel untuk ${penyakit}:`, articles);
+        
+        groupedMateri[penyakit] = { 
+          videos: videos, 
+          articles: articles,
+          semuaMateri: semuaMateri 
+        };
       });
 
+      console.log('📚 HASIL GROUPING MATERI:', groupedMateri);
       setMateriCache(prev => ({ ...prev, [cacheKey]: groupedMateri }));
       setMateriPenyakit(groupedMateri);
       
@@ -382,7 +450,7 @@ export default function FormPage() {
       console.error('Error fetching materials:', error);
       toast({
         title: 'Error',
-        description: 'Gagal memuat video edukasi',
+        description: 'Gagal memuat materi edukasi: ' + error.message,
         status: 'error',
         duration: 3000,
       });
@@ -397,11 +465,33 @@ export default function FormPage() {
     onVideoModalOpen();
   };
 
-  // Komponen Video Gallery
+  // Komponen Video Gallery - PERBAIKAN DI SINI
   const VideoGallerySection = ({ penyakit }) => {
-    const materi = materiPenyakit[penyakit.name] || { videos: [] };
+    if (!penyakit || !penyakit.name) {
+      console.log('❌ Penyakit tidak valid:', penyakit);
+      return null;
+    }
 
-    if (!materi.videos || materi.videos.length === 0) {
+    const materi = materiPenyakit[penyakit.name] || { videos: [], articles: [], semuaMateri: [] };
+    const videos = materi.videos || [];
+
+    console.log(`🎬 Rendering VideoGallery untuk: ${penyakit.name}`, {
+      semuaMateri: materi.semuaMateri,
+      videos: videos
+    });
+
+    if (loadingMateri) {
+      return (
+        <Box mt={6} p={6} bg="gray.50" borderRadius="lg">
+          <VStack spacing={3} align="center">
+            <Skeleton height="20px" width="200px" />
+            <Skeleton height="100px" width="100%" />
+          </VStack>
+        </Box>
+      );
+    }
+
+    if (videos.length === 0) {
       return (
         <Box mt={6} p={6} bg="gray.50" borderRadius="lg">
           <VStack spacing={3} align="center">
@@ -409,6 +499,9 @@ export default function FormPage() {
             <Heading size="md" color="gray.600">Video Edukasi {penyakit.name}</Heading>
             <Text color="gray.500" textAlign="center">
               Video edukasi untuk {penyakit.name} sedang dalam pengembangan.
+            </Text>
+            <Text fontSize="sm" color="gray.400">
+              Total materi ditemukan: {materi.semuaMateri.length}
             </Text>
           </VStack>
         </Box>
@@ -426,7 +519,7 @@ export default function FormPage() {
           <Text color="gray.600">Untuk informasi lebih lanjut, Anda dapat menonton video edukasi berikut:</Text>
 
           <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
-            {materi.videos.map((video) => (
+            {videos.map((video) => (
               <YouTubeThumbnailCard 
                 key={video.id} 
                 video={video}
@@ -434,6 +527,53 @@ export default function FormPage() {
               />
             ))}
           </SimpleGrid>
+        </VStack>
+      </Box>
+    );
+  };
+
+  // Komponen untuk menampilkan SEMUA pertanyaan dalam satu penyakit dengan nomor urut
+  const DiseaseQuestionsPage = ({ diseaseName, questions }) => {
+    // Urutkan pertanyaan berdasarkan urutan jika ada
+    const sortedQuestions = [...questions].sort((a, b) => {
+      const urutanA = a.urutan || 999;
+      const urutanB = b.urutan || 999;
+      return urutanA - urutanB;
+    });
+
+    return (
+      <Box w="100%">
+        <Box mb={6} p={4} bg="blue.50" borderRadius="lg">
+          <HStack justify="space-between" align="center">
+            <Box>
+              <Badge colorScheme="blue" fontSize="md" mb={2}>
+                Kelompok Penyakit: {diseaseName}
+              </Badge>
+              <Text fontSize="sm" color="gray.600">
+                {sortedQuestions.length} pertanyaan untuk dijawab
+              </Text>
+            </Box>
+            <Badge colorScheme="purple" fontSize="md">
+              Step {currentStep} dari {diseaseSteps.length}
+            </Badge>
+          </HStack>
+        </Box>
+
+        <VStack spacing={8} align="stretch">
+          {sortedQuestions.map((question, index) => (
+            <FormControl key={question.id} mb={8} isRequired>
+              <FormLabel fontSize="lg" fontWeight="medium" mb={4}>
+                <Badge colorScheme="blue" mr={2} fontSize="md">
+                  {index + 1}
+                </Badge>
+                {question.pertanyaan_text}
+              </FormLabel>
+              <RatingScale
+                value={jawaban[question.id] || ''}
+                onChange={(value) => handleRatingChange(question.id, value)}
+              />
+            </FormControl>
+          ))}
         </VStack>
       </Box>
     );
@@ -462,6 +602,8 @@ export default function FormPage() {
     content += `STATISTIK SKRINING:\n`;
     content += `- Total Pertanyaan: ${results.totalPertanyaan}\n`;
     content += `- Pertanyaan Terjawab: ${results.pertanyaanTerjawab}\n`;
+    content += `- Total Skor: ${results.totalSkor}/${results.maxSkor}\n`;
+    content += `- Persentase: ${results.persentase}%\n`;
     content += `- Penyakit Terdeteksi: ${results.detectedDiseases.length}\n\n`;
     
     content += `HASIL DETEKSI PENYAKIT:\n`;
@@ -469,7 +611,8 @@ export default function FormPage() {
     
     results.detectedDiseases.forEach((disease, index) => {
       content += `${index + 1}. ${disease.name.toUpperCase()}\n`;
-      content += `   - Skor Rata-rata: ${disease.averageScore.toFixed(1)}/10\n`;
+      content += `   - Skor: ${disease.totalScore}/${disease.maxScore}\n`;
+      content += `   - Persentase: ${disease.persentase}%\n`;
       content += `   - Kategori Risiko: ${disease.riskCategory}\n\n`;
       
       if (disease.rekomendasi && disease.rekomendasi.length > 0) {
@@ -624,13 +767,13 @@ export default function FormPage() {
       doc.setTextColor(colors.darkText[0], colors.darkText[1], colors.darkText[2]);
       doc.setFont('helvetica', 'normal');
       
-      const confidenceText = `Skor Rata-rata: ${disease.averageScore.toFixed(1)}/10 | Kategori Risiko: ${disease.riskCategory}`;
+      const confidenceText = `Skor: ${disease.totalScore}/${disease.maxScore} | Persentase: ${disease.persentase}% | Kategori Risiko: ${disease.riskCategory}`;
       doc.text(confidenceText, margin + 5, yPosition);
       yPosition += 8;
 
       const description = disease.name === "Tidak Terdeteksi Penyakit Serius" 
         ? "Berdasarkan hasil skrining, tidak terdeteksi indikasi penyakit serius. Pertahankan pola hidup sehat dan lakukan pemeriksaan rutin."
-        : `Terdeteksi indikasi ${disease.name.toLowerCase()} dengan skor rata-rata ${disease.averageScore.toFixed(1)}/10. Hasil ini merupakan peringatan dini dan memerlukan konsultasi lebih lanjut dengan tenaga kesehatan.`;
+        : `Terdeteksi indikasi ${disease.name.toLowerCase()} dengan persentase ${disease.persentase}%. Hasil ini merupakan peringatan dini dan memerlukan konsultasi lebih lanjut dengan tenaga kesehatan.`;
       
       const splitDesc = doc.splitTextToSize(description, pageWidth - 2 * margin - 10);
       doc.text(splitDesc, margin + 5, yPosition);
@@ -718,7 +861,11 @@ export default function FormPage() {
       return false;
     }
 
-    const unansweredQuestions = pertanyaan.filter(q => !jawaban[q.id]);
+    // Validasi semua pertanyaan sudah dijawab
+    const currentDisease = diseaseSteps[currentStep - 1];
+    const questionsForDisease = groupedQuestions[currentDisease] || [];
+    const unansweredQuestions = questionsForDisease.filter(q => !jawaban[q.id]);
+    
     if (unansweredQuestions.length > 0) {
       toast({
         title: 'Pertanyaan Belum Lengkap',
@@ -741,7 +888,11 @@ export default function FormPage() {
       
       const penyakit = question.jenis_penyakit;
       if (!diseaseScores[penyakit]) {
-        diseaseScores[penyakit] = { totalScore: 0, questionCount: 0 };
+        diseaseScores[penyakit] = { 
+          totalScore: 0, 
+          questionCount: 0,
+          maxPossibleScore: 0
+        };
       }
       
       const jawabanValue = jawaban[question.id];
@@ -749,6 +900,7 @@ export default function FormPage() {
         const score = parseInt(jawabanValue);
         diseaseScores[penyakit].totalScore += score;
         diseaseScores[penyakit].questionCount += 1;
+        diseaseScores[penyakit].maxPossibleScore += 10;
         
         if (score >= 7) {
           if (question.rekomendasi) semuaRekomendasi.push({ rekomendasi: question.rekomendasi, penyakit: penyakit });
@@ -762,20 +914,24 @@ export default function FormPage() {
       if (data.questionCount === 0) return;
       
       const averageScore = data.totalScore / data.questionCount;
+      const persentase = (data.totalScore / data.maxPossibleScore) * 100;
       
       let riskCategory = "Rendah";
       
-      if (averageScore >= 7) {
+      if (persentase >= 70) {
         riskCategory = "Tinggi";
-      } else if (averageScore >= 4) {
+      } else if (persentase >= 40) {
         riskCategory = "Sedang";
       }
       
-      if (averageScore >= 4) {
+      if (persentase >= 40) {
         const rekomendasiPenyakit = semuaRekomendasi.filter(r => r.penyakit === penyakit).map(r => r.rekomendasi);
 
         detectedDiseases.push({
           name: penyakit,
+          totalScore: data.totalScore,
+          maxScore: data.maxPossibleScore,
+          persentase: Math.round(persentase),
           averageScore: averageScore,
           totalQuestions: data.questionCount,
           riskCategory: riskCategory,
@@ -787,6 +943,9 @@ export default function FormPage() {
     if (detectedDiseases.length === 0) {
       detectedDiseases.push({
         name: "Tidak Terdeteksi Penyakit Serius",
+        totalScore: 0,
+        maxScore: 0,
+        persentase: 0,
         averageScore: 0,
         totalQuestions: 0,
         riskCategory: "Rendah",
@@ -798,15 +957,24 @@ export default function FormPage() {
       });
     }
 
-    detectedDiseases.sort((a, b) => {
-      const riskOrder = { "Tinggi": 3, "Sedang": 2, "Rendah": 1 };
-      return riskOrder[b.riskCategory] - riskOrder[a.riskCategory];
-    });
+    // Urutkan berdasarkan persentase tertinggi
+    detectedDiseases.sort((a, b) => b.persentase - a.persentase);
+
+    const totalSkor = pertanyaan.reduce((total, q) => {
+      const jawabanValue = jawaban[q.id];
+      return total + (jawabanValue ? parseInt(jawabanValue) : 0);
+    }, 0);
+
+    const maxSkor = pertanyaan.length * 10;
+    const persentaseTotal = Math.round((totalSkor / maxSkor) * 100);
 
     return {
       detectedDiseases: detectedDiseases,
       totalPertanyaan: pertanyaan.length,
-      pertanyaanTerjawab: Object.keys(jawaban).length
+      pertanyaanTerjawab: Object.keys(jawaban).length,
+      totalSkor: totalSkor,
+      maxSkor: maxSkor,
+      persentase: persentaseTotal
     };
   };
 
@@ -822,8 +990,12 @@ export default function FormPage() {
       .filter(disease => disease.name !== "Tidak Terdeteksi Penyakit Serius")
       .map(disease => disease.name);
     
+    console.log('🦠 Penyakit terdeteksi untuk dicari materinya:', detectedDiseaseNames);
+    
     if (detectedDiseaseNames.length > 0) {
       await fetchMateriPenyakit(detectedDiseaseNames);
+    } else {
+      console.log('ℹ️ Tidak ada penyakit terdeteksi, tidak perlu fetch materi');
     }
 
     // Simpan hasil ke Firestore
@@ -844,7 +1016,7 @@ export default function FormPage() {
     }
   };
 
-  // Navigasi
+  // Navigasi multi-step
   const handleBack = () => {
     if (currentStep > 0) {
       setCurrentStep(currentStep - 1);
@@ -855,33 +1027,91 @@ export default function FormPage() {
 
   const handleNext = () => {
     if (currentStep === 0) {
+      // Validasi data diri
       if (!formData.nama.trim() || !formData.usia || !formData.jenisKelamin) {
         toast({ title: 'Data tidak lengkap', description: 'Harap lengkapi data diri terlebih dahulu', status: 'warning', duration: 3000 });
         return;
       }
+      setCurrentStep(1);
+    } else {
+      // Validasi pertanyaan untuk penyakit saat ini
+      if (!validateForm()) {
+        return;
+      }
+      
+      // Pindah ke penyakit berikutnya
+      if (currentStep < diseaseSteps.length) {
+        setCurrentStep(currentStep + 1);
+      } else {
+        // Semua pertanyaan selesai, submit form
+        handleSubmit(new Event('submit'));
+      }
     }
-    setCurrentStep(currentStep + 1);
+  };
+
+  // Navigasi hasil
+  const handleNextResult = () => {
+    const results = calculateResults();
+    if (currentResultIndex < results.detectedDiseases.length - 1) {
+      setCurrentResultIndex(currentResultIndex + 1);
+    }
+  };
+
+  const handlePrevResult = () => {
+    if (currentResultIndex > 0) {
+      setCurrentResultIndex(currentResultIndex - 1);
+    }
   };
 
   // Progress calculation
   useEffect(() => {
     if (currentStep === 0) {
       setProgress(10);
-    } else if (currentStep === 1) {
-      const answered = Object.keys(jawaban).length;
-      const total = pertanyaan.length;
-      setProgress(10 + (answered / total) * 80);
     } else {
-      setProgress(100);
+      const totalQuestions = pertanyaan.length;
+      const answeredQuestions = Object.keys(jawaban).length;
+      const baseProgress = 10;
+      const questionProgress = (answeredQuestions / totalQuestions) * 80;
+      setProgress(baseProgress + questionProgress);
     }
   }, [currentStep, jawaban, pertanyaan.length]);
 
-  // Komponen untuk menampilkan hasil penyakit individual - DIUBAH
-  const DiseaseResultCard = ({ disease }) => {
+  // Komponen untuk menampilkan hasil per halaman
+  const DiseaseResultPage = ({ disease, currentPage, totalPages, onNext, onPrev }) => {
     const hasRekomendasi = disease.rekomendasi && disease.rekomendasi.length > 0;
 
     return (
-      <Box key={disease.name} mb={6}>
+      <Box>
+        {/* Navigation Header */}
+        <Box mb={6} p={4} bg="purple.50" borderRadius="lg">
+          <HStack justify="space-between" align="center">
+            <Badge colorScheme="purple" fontSize="lg" px={3} py={1}>
+              Indikasi {currentPage} dari {totalPages}
+            </Badge>
+            <HStack spacing={3}>
+              <Button
+                leftIcon={<ChevronLeftIcon />}
+                onClick={onPrev}
+                isDisabled={currentPage === 1}
+                variant="outline"
+                size="sm"
+              >
+                Sebelumnya
+              </Button>
+              <Button
+                rightIcon={<ChevronRightIcon />}
+                onClick={onNext}
+                isDisabled={currentPage === totalPages}
+                colorScheme="purple"
+                size="sm"
+              >
+                Selanjutnya
+              </Button>
+            </HStack>
+          </HStack>
+        </Box>
+
+        {/* Disease Result Card */}
         <Box 
           p={6} 
           bg={
@@ -906,16 +1136,47 @@ export default function FormPage() {
               {disease.name}
             </Heading>
 
-            {/* HAPUS SKOR RATA-RATA DAN TINGKAT KEYAKINAN */}
+            {/* Skor dan Persentase */}
+            <Box w="full" p={4} bg="white" borderRadius="md" boxShadow="sm">
+              <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4}>
+                <VStack>
+                  <Text fontSize="sm" color="gray.600">Total Skor</Text>
+                  <Text fontSize="2xl" fontWeight="bold" color="blue.600">
+                    {disease.totalScore}/{disease.maxScore}
+                  </Text>
+                </VStack>
+                <VStack>
+                  <Text fontSize="sm" color="gray.600">Persentase</Text>
+                  <Text fontSize="2xl" fontWeight="bold" color="purple.600">
+                    {disease.persentase}%
+                  </Text>
+                </VStack>
+                <VStack>
+                  <Text fontSize="sm" color="gray.600">Kategori Risiko</Text>
+                  <Badge 
+                    fontSize="md" 
+                    px={3} 
+                    py={1}
+                    colorScheme={
+                      disease.riskCategory === "Tinggi" ? "red" :
+                      disease.riskCategory === "Sedang" ? "orange" : "green"
+                    }
+                  >
+                    {disease.riskCategory}
+                  </Badge>
+                </VStack>
+              </SimpleGrid>
+            </Box>
+
             <Text fontSize="lg" color="gray.700">
               <strong>
                 {disease.name === "Tidak Terdeteksi Penyakit Serius" 
                   ? "Tidak terdeteksi indikasi penyakit serius." 
-                  : `Terdeteksi indikasi ${disease.name.toLowerCase()}.`}
+                  : `Terdeteksi indikasi ${disease.name.toLowerCase()} dengan tingkat risiko ${disease.riskCategory.toLowerCase()}.`}
               </strong>
             </Text>
 
-            {/* REKOMENDASI UTAMA - PERIKSA KE FASILITAS KESEHATAN */}
+            {/* REKOMENDASI UTAMA */}
             <Box w="full" mt={4}>
               <Heading size="md" color="red.600" mb={4}>Rekomendasi</Heading>
               
@@ -940,24 +1201,68 @@ export default function FormPage() {
           </VStack>
         </Box>
         
-        {/* VIDEO EDUKASI DITAMPILKAN KEMBALI */}
+        {/* VIDEO EDUKASI */}
         <VideoGallerySection penyakit={disease} />
       </Box>
     );
   };
 
-  // Render pertanyaan
-  const renderQuestion = (question, index) => {
+  // Render pertanyaan berdasarkan step
+  const renderCurrentStep = () => {
+    // Step 0: Data Diri
+    if (currentStep === 0) {
+      return (
+        <Box w="100%">
+          <Heading size="md" color="purple.700" mb={4}>Data Diri</Heading>
+          <FormControl isRequired mb={4}>
+            <FormLabel fontSize="lg" fontWeight="medium">Nama Lengkap</FormLabel>
+            <Input 
+              value={formData.nama} 
+              onChange={(e) => handleInputChange('nama', e.target.value)} 
+              placeholder="Masukkan nama lengkap Anda" 
+              size="lg" 
+            />
+          </FormControl>
+          <FormControl isRequired mb={4}>
+            <FormLabel fontSize="lg" fontWeight="medium">Usia</FormLabel>
+            <NumberInput value={formData.usia} onChange={(value) => handleInputChange('usia', value)} min={1} max={120}>
+              <NumberInputField placeholder="Masukkan usia Anda" />
+              <NumberInputStepper>
+                <NumberIncrementStepper />
+                <NumberDecrementStepper />
+              </NumberInputStepper>
+            </NumberInput>
+          </FormControl>
+          <FormControl isRequired mb={4}>
+            <FormLabel fontSize="lg" fontWeight="medium">Jenis Kelamin</FormLabel>
+            <RadioGroup value={formData.jenisKelamin} onChange={(value) => handleInputChange('jenisKelamin', value)}>
+              <Stack direction="row" spacing={8}>
+                <Radio value="laki-laki" size="lg" colorScheme="purple">Laki-laki</Radio>
+                <Radio value="perempuan" size="lg" colorScheme="purple">Perempuan</Radio>
+              </Stack>
+            </RadioGroup>
+          </FormControl>
+        </Box>
+      );
+    }
+
+    // Step 1+: Pertanyaan berdasarkan penyakit (SEMUA PERTANYAAN DALAM SATU HALAMAN)
+    const currentDisease = diseaseSteps[currentStep - 1];
+    const questionsForDisease = groupedQuestions[currentDisease] || [];
+
+    if (questionsForDisease.length === 0) {
+      return (
+        <Box textAlign="center" py={8}>
+          <Text color="gray.500">Tidak ada pertanyaan yang tersedia.</Text>
+        </Box>
+      );
+    }
+
     return (
-      <FormControl key={question.id} mb={8} isRequired>
-        <FormLabel fontSize="lg" fontWeight="medium" mb={4}>
-          {index + 1}. {question.pertanyaan_text}
-        </FormLabel>
-        <RatingScale
-          value={jawaban[question.id] || ''}
-          onChange={(value) => handleRatingChange(question.id, value)}
-        />
-      </FormControl>
+      <DiseaseQuestionsPage 
+        diseaseName={currentDisease}
+        questions={questionsForDisease}
+      />
     );
   };
 
@@ -978,6 +1283,7 @@ export default function FormPage() {
   // TAMPILAN HASIL ANALISIS
   if (showResults) {
     const results = calculateResults();
+    const currentDisease = results.detectedDiseases[currentResultIndex];
 
     return (
       <Box bg="white" minH="100vh" pt={0}>
@@ -1005,17 +1311,22 @@ export default function FormPage() {
                       <Text><strong>Usia:</strong> {formData.usia} tahun</Text>
                       <Text><strong>Jenis Kelamin:</strong> {formData.jenisKelamin}</Text>
                       <Text><strong>Tanggal Pemeriksaan:</strong> {new Date().toLocaleDateString('id-ID')}</Text>
+                      <Text><strong>Total Skor:</strong> {results.totalSkor}/{results.maxSkor} ({results.persentase}%)</Text>
                     </VStack>
                   </Box>
 
-                  {results.detectedDiseases.map((disease) => (
-                    <DiseaseResultCard key={disease.name} disease={disease} />
-                  ))}
+                  <DiseaseResultPage 
+                    disease={currentDisease}
+                    currentPage={currentResultIndex + 1}
+                    totalPages={results.detectedDiseases.length}
+                    onNext={handleNextResult}
+                    onPrev={handlePrevResult}
+                  />
                 </VStack>
               </CardBody>
             </Card>
 
-            {/* TOMBOL DOWNLOAD KEMBALI DITAMBAHKAN */}
+            {/* TOMBOL DOWNLOAD */}
             <Card borderRadius="xl" boxShadow="lg">
               <CardHeader bg="green.50" borderTopRadius="xl">
                 <Heading size="md" color="green.700">Download Hasil Skrining</Heading>
@@ -1069,7 +1380,7 @@ export default function FormPage() {
           <Box>
             <HStack justify="space-between" mb={2}>
               <Text fontSize="sm" color="gray.600">
-                {currentStep === 0 ? 'Data Diri' : 'Pertanyaan Kesehatan'}
+                {currentStep === 0 ? 'Data Diri' : `Step ${currentStep} dari ${diseaseSteps.length}`}
               </Text>
               <Text fontSize="sm" color="gray.600">{Math.round(progress)}%</Text>
             </HStack>
@@ -1085,7 +1396,9 @@ export default function FormPage() {
               {currentStep === 0 ? 'Data Diri' : 'Pertanyaan Kesehatan'}
             </Heading>
             <Text color="gray.600">
-              {currentStep === 0 ? 'Lengkapi data diri Anda terlebih dahulu' : 'Jawab semua pertanyaan berikut'}
+              {currentStep === 0 
+                ? 'Lengkapi data diri Anda terlebih dahulu' 
+                : 'Jawab semua pertanyaan dengan jujur sesuai kondisi kesehatan Anda'}
             </Text>
           </Box>
 
@@ -1093,68 +1406,7 @@ export default function FormPage() {
             <CardBody>
               <form onSubmit={handleSubmit}>
                 <VStack spacing={6}>
-                  {/* STEP 1: Data Diri */}
-                  {currentStep === 0 && (
-                    <Box w="100%">
-                      <Heading size="md" color="purple.700" mb={4}>Data Diri</Heading>
-                      <FormControl isRequired mb={4}>
-                        <FormLabel fontSize="lg" fontWeight="medium">Nama Lengkap</FormLabel>
-                        <Input 
-                          value={formData.nama} 
-                          onChange={(e) => handleInputChange('nama', e.target.value)} 
-                          placeholder="Masukkan nama lengkap Anda" 
-                          size="lg" 
-                        />
-                      </FormControl>
-                      <FormControl isRequired mb={4}>
-                        <FormLabel fontSize="lg" fontWeight="medium">Usia</FormLabel>
-                        <NumberInput value={formData.usia} onChange={(value) => handleInputChange('usia', value)} min={1} max={120}>
-                          <NumberInputField placeholder="Masukkan usia Anda" />
-                          <NumberInputStepper>
-                            <NumberIncrementStepper />
-                            <NumberDecrementStepper />
-                          </NumberInputStepper>
-                        </NumberInput>
-                      </FormControl>
-                      <FormControl isRequired mb={4}>
-                        <FormLabel fontSize="lg" fontWeight="medium">Jenis Kelamin</FormLabel>
-                        <RadioGroup value={formData.jenisKelamin} onChange={(value) => handleInputChange('jenisKelamin', value)}>
-                          <Stack direction="row" spacing={8}>
-                            <Radio value="laki-laki" size="lg" colorScheme="purple">Laki-laki</Radio>
-                            <Radio value="perempuan" size="lg" colorScheme="purple">Perempuan</Radio>
-                          </Stack>
-                        </RadioGroup>
-                      </FormControl>
-                    </Box>
-                  )}
-
-                  {/* STEP 2: Pertanyaan Kesehatan */}
-                  {currentStep === 1 && (
-                    <Box w="100%">
-                      <Heading size="md" color="purple.700" mb={4}>
-                        Pertanyaan Kesehatan
-                        <Text fontSize="sm" color="gray.600" fontWeight="normal" mt={1}>
-                          {Object.keys(jawaban).length} dari {pertanyaan.length} pertanyaan terjawab
-                        </Text>
-                      </Heading>
-                      {loadingPertanyaan ? (
-                        <VStack spacing={4}>
-                          {[1, 2, 3].map((item) => (
-                            <Skeleton key={item} height="100px" width="100%" borderRadius="md" />
-                          ))}
-                        </VStack>
-                      ) : pertanyaan.length === 0 ? (
-                        <Box textAlign="center" py={8}>
-                          <Text color="gray.500" mb={4}>Belum ada pertanyaan yang tersedia.</Text>
-                          <Button colorScheme="blue" onClick={fetchPertanyaan}>Coba Muat Ulang</Button>
-                        </Box>
-                      ) : (
-                        <VStack spacing={6}>
-                          {pertanyaan.map((question, index) => renderQuestion(question, index))}
-                        </VStack>
-                      )}
-                    </Box>
-                  )}
+                  {renderCurrentStep()}
 
                   {/* Informasi Penting */}
                   <Alert status="info" borderRadius="md">
@@ -1171,15 +1423,19 @@ export default function FormPage() {
 
                   {/* Navigation Buttons */}
                   <HStack w="100%" spacing={4}>
-                    {currentStep === 0 ? (
-                      <Button onClick={handleNext} w="100%" size="lg" colorScheme="purple">
-                        Lanjut ke Pertanyaan
-                      </Button>
-                    ) : (
-                      <Button type="submit" w="100%" size="lg" colorScheme="purple" isLoading={loadingPertanyaan}>
-                        Lihat Hasil Skrining
-                      </Button>
-                    )}
+                    <Button 
+                      onClick={handleNext} 
+                      w="100%" 
+                      size="lg" 
+                      colorScheme="purple"
+                      rightIcon={currentStep > 0 ? <ChevronRightIcon /> : undefined}
+                    >
+                      {currentStep === 0 
+                        ? 'Mulai Skrining' 
+                        : currentStep === diseaseSteps.length
+                        ? 'Lihat Hasil'
+                        : 'Pertanyaan Selanjutnya'}
+                    </Button>
                   </HStack>
                 </VStack>
               </form>

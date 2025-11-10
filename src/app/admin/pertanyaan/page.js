@@ -47,6 +47,17 @@ import {
   TabPanels,
   Tab,
   TabPanel,
+  NumberInput,
+  NumberInputField,
+  NumberInputStepper,
+  NumberIncrementStepper,
+  NumberDecrementStepper,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItem,
+  MenuGroup,
+  MenuDivider,
 } from '@chakra-ui/react';
 import { 
   FiPlus, 
@@ -55,7 +66,11 @@ import {
   FiSearch,
   FiRefreshCw,
   FiFileText,
-  FiCheckCircle
+  FiCheckCircle,
+  FiList,
+  FiSettings,
+  FiSave,
+  FiDatabase
 } from 'react-icons/fi';
 import { 
   collection, 
@@ -64,12 +79,386 @@ import {
   updateDoc, 
   deleteDoc, 
   doc, 
-  query, 
-  orderBy,
+  writeBatch,
   serverTimestamp 
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import AdminLayout from '@/components/AdminLayout';
+
+// Data semua pertanyaan default - DIUBAH: Kardiovaskuler menjadi Endokrin
+const SEMUA_PERTANYAAN = [
+  // ==================== SISTEM PERNAPASAN - URUTAN 1 ====================
+  {
+    pertanyaan_text: "Seberapa berat kesulitan bernapas yang Anda rasakan selama 7 hari terakhir?",
+    jenis_penyakit: "Sistem Pernapasan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 1
+  },
+  {
+    pertanyaan_text: "Seberapa sering atau berat batuk yang Anda alami selama 7 hari terakhir?",
+    jenis_penyakit: "Sistem Pernapasan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 2
+  },
+  {
+    pertanyaan_text: "Seberapa berat nyeri atau ketidaknyamanan di dada yang Anda rasakan selama 7 hari terakhir?",
+    jenis_penyakit: "Sistem Pernapasan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 3
+  },
+  {
+    pertanyaan_text: "Seberapa sering Anda mengalami bunyi mengi saat bernapas selama 7 hari terakhir?",
+    jenis_penyakit: "Sistem Pernapasan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 4
+  },
+  {
+    pertanyaan_text: "Seberapa berat napas pendek atau cepat yang Anda rasakan selama 7 hari terakhir?",
+    jenis_penyakit: "Sistem Pernapasan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 5
+  },
+  {
+    pertanyaan_text: "Seberapa berat rasa lelah atau sesak yang Anda rasakan saat beraktivitas ringan selama 7 hari terakhir?",
+    jenis_penyakit: "Sistem Pernapasan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 6
+  },
+  {
+    pertanyaan_text: "Seberapa sering tidur Anda terganggu oleh batuk atau sesak napas selama 7 hari terakhir?",
+    jenis_penyakit: "Sistem Pernapasan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 7
+  },
+  {
+    pertanyaan_text: "Seberapa berat gangguan akibat dahak berlebihan atau sulit keluar selama 7 hari terakhir?",
+    jenis_penyakit: "Sistem Pernapasan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 8
+  },
+  {
+    pertanyaan_text: "Seberapa berat rasa berat, nyeri, atau panas di dada yang Anda rasakan selama 7 hari terakhir?",
+    jenis_penyakit: "Sistem Pernapasan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 9
+  },
+  {
+    pertanyaan_text: "Seberapa berat rasa cemas atau panik yang Anda rasakan akibat kesulitan bernapas selama 7 hari terakhir?",
+    jenis_penyakit: "Sistem Pernapasan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 10
+  },
+
+  // ==================== SISTEM KARDIOVASKULER - URUTAN 2 ====================
+  {
+    pertanyaan_text: "Seberapa berat nyeri atau tekanan di dada yang Anda rasakan selama 7 hari terakhir?",
+    jenis_penyakit: "Sistem Kardiovaskuler",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 1
+  },
+  {
+    pertanyaan_text: "Seberapa berat sesak napas yang Anda alami saat beraktivitas ringan selama 7 hari terakhir?",
+    jenis_penyakit: "Sistem Kardiovaskuler",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 2
+  },
+  {
+    pertanyaan_text: "Seberapa sering atau seberapa berat jantung Anda berdebar selama 7 hari terakhir?",
+    jenis_penyakit: "Sistem Kardiovaskuler",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 3
+  },
+  {
+    pertanyaan_text: "Seberapa berat kelelahan yang Anda rasakan selama 7 hari terakhir?",
+    jenis_penyakit: "Sistem Kardiovaskuler",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 4
+  },
+  {
+    pertanyaan_text: "Seberapa berat pembengkakan pada pergelangan kaki, betis, atau tungkai Anda selama 7 hari terakhir?",
+    jenis_penyakit: "Sistem Kardiovaskuler",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 5
+  },
+  {
+    pertanyaan_text: "Seberapa sering atau berat rasa pusing yang Anda rasakan selama 7 hari terakhir?",
+    jenis_penyakit: "Sistem Kardiovaskuler",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 6
+  },
+  {
+    pertanyaan_text: "Seberapa besar gangguan tidur yang Anda alami akibat sesak napas atau nyeri dada selama 7 hari terakhir?",
+    jenis_penyakit: "Sistem Kardiovaskuler",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 7
+  },
+  {
+    pertanyaan_text: "Seberapa berat rasa cemas, takut, atau tertekan yang Anda rasakan akibat keluhan jantung selama 7 hari terakhir?",
+    jenis_penyakit: "Sistem Kardiovaskuler",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 8
+  },
+  {
+    pertanyaan_text: "Seberapa berat nyeri yang menjalar ke bahu, leher, rahang, atau lengan kiri selama 7 hari terakhir?",
+    jenis_penyakit: "Sistem Kardiovaskuler",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 9
+  },
+  {
+    pertanyaan_text: "Seberapa berat keringat berlebih atau rasa panas tiba-tiba yang Anda rasakan selama 7 hari terakhir?",
+    jenis_penyakit: "Sistem Kardiovaskuler",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 10
+  },
+
+  // ==================== SISTEM PENCERNAAN - URUTAN 3 ====================
+  {
+    pertanyaan_text: "Seberapa berat nyeri perut yang Anda rasakan?",
+    jenis_penyakit: "Sistem Pencernaan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 1
+  },
+  {
+    pertanyaan_text: "Seberapa sering Anda merasa mual dalam 24 jam terakhir?",
+    jenis_penyakit: "Sistem Pencernaan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 2
+  },
+  {
+    pertanyaan_text: "Seberapa sering atau berat muntah yang Anda alami?",
+    jenis_penyakit: "Sistem Pencernaan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 3
+  },
+  {
+    pertanyaan_text: "Seberapa baik nafsu makan Anda? (0 = sangat baik, 10 = sama sekali tidak ada)",
+    jenis_penyakit: "Sistem Pencernaan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 4
+  },
+  {
+    pertanyaan_text: "Seberapa sering atau berat rasa kembung/perut penuh yang Anda rasakan?",
+    jenis_penyakit: "Sistem Pencernaan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 5
+  },
+  {
+    pertanyaan_text: "Apakah Anda mengalami kesulitan BAB? (0 = lancar, 10 = sangat sulit / tidak BAB)",
+    jenis_penyakit: "Sistem Pencernaan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 6
+  },
+  {
+    pertanyaan_text: "Seberapa sering Anda mengalami diare dalam 24 jam terakhir?",
+    jenis_penyakit: "Sistem Pencernaan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 7
+  },
+  {
+    pertanyaan_text: "Seberapa berat rasa panas atau perih di ulu hati Anda?",
+    jenis_penyakit: "Sistem Pencernaan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 8
+  },
+  {
+    pertanyaan_text: "Seberapa besar perubahan berat badan yang Anda rasakan akhir-akhir ini?",
+    jenis_penyakit: "Sistem Pencernaan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 9
+  },
+  {
+    pertanyaan_text: "Seberapa besar gangguan pencernaan mempengaruhi energi atau aktivitas harian Anda?",
+    jenis_penyakit: "Sistem Pencernaan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 10
+  },
+
+  // ==================== GANGGUAN NUTRISI - URUTAN 4 ====================
+  {
+    pertanyaan_text: "Seberapa besar penurunan nafsu makan yang Anda rasakan? (1 = nafsu makan baik, 10 = tidak ada nafsu makan sama sekali)",
+    jenis_penyakit: "Gangguan Nutrisi",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 1
+  },
+  {
+    pertanyaan_text: "Seberapa khawatir Anda terhadap penurunan berat badan akhir-akhir ini? (1 = tidak khawatir, 10 = sangat khawatir)",
+    jenis_penyakit: "Gangguan Nutrisi",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 2
+  },
+  {
+    pertanyaan_text: "Seberapa sering Anda merasa mual dalam 24 jam terakhir? (1 = tidak mual, 10 = mual terus-menerus)",
+    jenis_penyakit: "Gangguan Nutrisi",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 3
+  },
+  {
+    pertanyaan_text: "Seberapa sering Anda mengalami muntah dalam 24 jam terakhir? (1 = tidak pernah muntah, 10 = muntah sangat sering)",
+    jenis_penyakit: "Gangguan Nutrisi",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 4
+  },
+  {
+    pertanyaan_text: "Seberapa sering Anda merasa haus atau mulut kering? (1 = tidak haus, 10 = sangat haus / kering sekali)",
+    jenis_penyakit: "Gangguan Nutrisi",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 5
+  },
+  {
+    pertanyaan_text: "Seberapa lelah tubuh Anda terasa saat ini? (1 = tidak lelah, 10 = sangat lelah, tidak bertenaga)",
+    jenis_penyakit: "Gangguan Nutrisi",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 6
+  },
+  {
+    pertanyaan_text: "Seberapa nyeri atau tidak nyaman perut Anda? (1 = tidak nyeri, 10 = nyeri sangat berat)",
+    jenis_penyakit: "Gangguan Nutrisi",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 7
+  },
+  {
+    pertanyaan_text: "Seberapa sulit Anda menelan makanan atau minuman? (1 = tidak sulit, 10 = tidak bisa menelan sama sekali)",
+    jenis_penyakit: "Gangguan Nutrisi",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 8
+  },
+  {
+    pertanyaan_text: "Seberapa sering Anda merasa sedih atau tidak bersemangat karena masalah makan/nutrisi Anda? (1 = tidak sedih, 10 = sangat sedih/putus asa)",
+    jenis_penyakit: "Gangguan Nutrisi",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 9
+  },
+  {
+    pertanyaan_text: "Bagaimana Anda menilai kualitas hidup Anda secara keseluruhan saat ini? (1 = sangat buruk, 10 = sangat baik)",
+    jenis_penyakit: "Gangguan Nutrisi",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 10
+  },
+
+  // ==================== SISTEM PERKEMIHAN - URUTAN 5 ====================
+  {
+    pertanyaan_text: "Apakah anda merasakan sakit saat buang air kecil?",
+    jenis_penyakit: "Sistem Perkemihan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 1
+  },
+  {
+    pertanyaan_text: "Apakah buang air kecil Anda terasa lancar atau tersendat? (1 = sangat lancar, 10 = sangat tersendat)",
+    jenis_penyakit: "Sistem Perkemihan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 2
+  },
+  {
+    pertanyaan_text: "Apakah Anda merasa panas atau perih saat buang air kecil?",
+    jenis_penyakit: "Sistem Perkemihan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 3
+  },
+  {
+    pertanyaan_text: "Bagaimana warna air kencing Anda? (1 = sangat jernih, 10 = sangat keruh/pekat)",
+    jenis_penyakit: "Sistem Perkemihan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 4
+  },
+  {
+    pertanyaan_text: "Apakah Anda merasa nyeri di bagian bawah perut?",
+    jenis_penyakit: "Sistem Perkemihan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 5
+  },
+  {
+    pertanyaan_text: "Apakah Anda merasa sakit di pinggang?",
+    jenis_penyakit: "Sistem Perkemihan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 6
+  },
+  {
+    pertanyaan_text: "Apakah keluhan buang air kecil membuat tidur Anda terganggu?",
+    jenis_penyakit: "Sistem Perkemihan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 7
+  },
+  {
+    pertanyaan_text: "Apakah Anda merasa ada bengkak di kaki atau wajah?",
+    jenis_penyakit: "Sistem Perkemihan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 8
+  },
+  {
+    pertanyaan_text: "Apakah badan Anda terasa lemah karena keluhan buang air kecil?",
+    jenis_penyakit: "Sistem Perkemihan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 9
+  },
+  {
+    pertanyaan_text: "Apakah jumlah air kencing Anda terasa berkurang?",
+    jenis_penyakit: "Sistem Perkemihan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 10
+  },
+
+  // ==================== ENDOKRIN (TAMBAHAN) - URUTAN 6 ====================
+  {
+    pertanyaan_text: "Seberapa besar perubahan berat badan yang Anda rasakan (naik atau turun drastis) dalam beberapa waktu terakhir?",
+    jenis_penyakit: "Endokrin",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 1
+  },
+  {
+    pertanyaan_text: "Seberapa besar rasa lelah atau kelemahan yang Anda alami hari ini?",
+    jenis_penyakit: "Endokrin",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 2
+  },
+  {
+    pertanyaan_text: "Apakah Anda merasa mual atau tidak enak di perut?",
+    jenis_penyakit: "Endokrin",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 3
+  },
+  {
+    pertanyaan_text: "Seberapa baik nafsu makan Anda saat ini? (0 = sangat baik, 10 = tidak ada nafsu makan sama sekali)",
+    jenis_penyakit: "Endokrin",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 4
+  },
+  {
+    pertanyaan_text: "Apakah Anda merasa sesak napas atau sulit bernapas?",
+    jenis_penyakit: "Endokrin",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 5
+  },
+  {
+    pertanyaan_text: "Seberapa sedih atau tertekan perasaan Anda hari ini?",
+    jenis_penyakit: "Endokrin",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 6
+  },
+  {
+    pertanyaan_text: "Seberapa cemas atau gelisah Anda rasakan sekarang?",
+    jenis_penyakit: "Endokrin",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 7
+  },
+  {
+    pertanyaan_text: "Seberapa buruk kualitas tidur Anda akhir-akhir ini?",
+    jenis_penyakit: "Endokrin",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 8
+  },
+  {
+    pertanyaan_text: "Seberapa sering Anda merasa tidak nyaman karena mudah berkeringat, merasa panas/dingin berlebihan, atau tidak tahan suhu?",
+    jenis_penyakit: "Endokrin",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 9
+  },
+  {
+    pertanyaan_text: "Seberapa sering Anda merasa sangat haus atau sering buang air kecil karena kondisi Anda?",
+    jenis_penyakit: "Endokrin",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 10
+  }
+];
 
 export default function PertanyaanManagement() {
   const [pertanyaan, setPertanyaan] = useState([]);
@@ -79,6 +468,7 @@ export default function PertanyaanManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterJenis, setFilterJenis] = useState('');
   const [filterTipe, setFilterTipe] = useState('');
+  const [bulkUpdating, setBulkUpdating] = useState(false);
 
   const [formData, setFormData] = useState({
     pertanyaan_text: '',
@@ -88,11 +478,19 @@ export default function PertanyaanManagement() {
     indikasi: '',
     saran: '',
     penanganan: '',
-    rekomendasi: ''
+    rekomendasi: '',
+    urutan: 1
+  });
+
+  const [bulkUpdateData, setBulkUpdateData] = useState({
+    penyakit: '',
+    urutan: 1
   });
 
   const { isOpen: isModalOpen, onOpen: onModalOpen, onClose: onModalClose } = useDisclosure();
   const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
+  const { isOpen: isBulkModalOpen, onOpen: onBulkModalOpen, onClose: onBulkModalClose } = useDisclosure();
+  const { isOpen: isResetOpen, onOpen: onResetOpen, onClose: onResetClose } = useDisclosure();
   
   const cancelRef = useRef();
   const [editingId, setEditingId] = useState(null);
@@ -105,21 +503,26 @@ export default function PertanyaanManagement() {
     try {
       console.log('🔄 Fetching pertanyaan from Firestore...');
       
-      const q = query(
-        collection(db, 'pertanyaan'), 
-        orderBy('created_at', 'desc')
-      );
-      
-      const querySnapshot = await getDocs(q);
+      const querySnapshot = await getDocs(collection(db, 'pertanyaan'));
       const pertanyaanData = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
 
-      console.log('✅ Pertanyaan loaded:', pertanyaanData.length);
-      console.log('📊 Sample data:', pertanyaanData[0]);
-      setPertanyaan(pertanyaanData);
-      setFilteredPertanyaan(pertanyaanData);
+      // Sort manually by urutan and jenis_penyakit
+      const sortedData = pertanyaanData.sort((a, b) => {
+        const urutanA = a.urutan || 999;
+        const urutanB = b.urutan || 999;
+        if (urutanA !== urutanB) {
+          return urutanA - urutanB;
+        }
+        return (a.jenis_penyakit || '').localeCompare(b.jenis_penyakit || '');
+      });
+
+      console.log('✅ Pertanyaan loaded:', sortedData.length);
+      
+      setPertanyaan(sortedData);
+      setFilteredPertanyaan(sortedData);
       
     } catch (error) {
       console.error('❌ Error fetching pertanyaan:', error);
@@ -144,8 +547,8 @@ export default function PertanyaanManagement() {
 
     if (searchTerm) {
       filtered = filtered.filter(item =>
-        item.pertanyaan_text.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.jenis_penyakit.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.pertanyaan_text?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.jenis_penyakit?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (item.keyword_jawaban && item.keyword_jawaban.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
@@ -161,6 +564,178 @@ export default function PertanyaanManagement() {
     setFilteredPertanyaan(filtered);
   }, [pertanyaan, searchTerm, filterJenis, filterTipe]);
 
+  // FUNGSI RESET DATABASE
+  const handleResetDatabase = async () => {
+    setSubmitting(true);
+    try {
+      const querySnapshot = await getDocs(collection(db, 'pertanyaan'));
+      const batch = writeBatch(db);
+      
+      querySnapshot.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+
+      await batch.commit();
+      
+      toast({
+        title: 'Berhasil',
+        description: 'Semua pertanyaan berhasil dihapus',
+        status: 'success',
+        duration: 3000,
+      });
+
+      fetchPertanyaan();
+      onResetClose();
+    } catch (error) {
+      console.error('Error resetting database:', error);
+      toast({
+        title: 'Error',
+        description: 'Gagal menghapus pertanyaan',
+        status: 'error',
+        duration: 5000,
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // FUNGSI TAMBAH 60 PERTANYAAN
+  const handleAddDefaultQuestions = async () => {
+    setSubmitting(true);
+    
+    try {
+      console.log('🔄 Adding 60 default questions...');
+
+      const existingData = await getDocs(collection(db, 'pertanyaan'));
+      if (existingData.size > 0) {
+        toast({
+          title: 'Peringatan',
+          description: 'Sudah ada pertanyaan di database. Reset dulu jika ingin menambah ulang.',
+          status: 'warning',
+          duration: 5000,
+        });
+        return;
+      }
+
+      const batch = writeBatch(db);
+      
+      SEMUA_PERTANYAAN.forEach((question) => {
+        const docRef = doc(collection(db, 'pertanyaan'));
+        batch.set(docRef, {
+          ...question,
+          indikasi: '',
+          saran: '',
+          penanganan: '',
+          rekomendasi: '',
+          keyword_jawaban: '',
+          created_at: serverTimestamp(),
+          updated_at: serverTimestamp()
+        });
+      });
+
+      await batch.commit();
+
+      console.log('✅ 60 pertanyaan berhasil ditambahkan');
+      
+      toast({
+        title: 'Berhasil',
+        description: '60 pertanyaan default berhasil ditambahkan ke database',
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      });
+
+      fetchPertanyaan();
+      
+    } catch (error) {
+      console.error('❌ Error adding default questions:', error);
+      toast({
+        title: 'Error',
+        description: 'Gagal menambahkan pertanyaan default: ' + error.message,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // FUNGSI BULK UPDATE URUTAN MASAL
+  const handleBulkUpdate = async () => {
+    if (!bulkUpdateData.penyakit.trim() || !bulkUpdateData.urutan) {
+      toast({
+        title: 'Error',
+        description: 'Pilih penyakit dan isi urutan',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    setBulkUpdating(true);
+
+    try {
+      // Cari semua pertanyaan dengan jenis penyakit yang sama
+      const pertanyaanToUpdate = pertanyaan.filter(
+        item => item.jenis_penyakit === bulkUpdateData.penyakit
+      );
+
+      if (pertanyaanToUpdate.length === 0) {
+        toast({
+          title: 'Peringatan',
+          description: `Tidak ditemukan pertanyaan dengan penyakit "${bulkUpdateData.penyakit}"`,
+          status: 'warning',
+          duration: 3000,
+          isClosable: true,
+        });
+        return;
+      }
+
+      console.log(`🔄 Bulk updating ${pertanyaanToUpdate.length} pertanyaan for ${bulkUpdateData.penyakit} to urutan ${bulkUpdateData.urutan}`);
+
+      // Gunakan batch write untuk update semua sekaligus
+      const batch = writeBatch(db);
+
+      pertanyaanToUpdate.forEach((item) => {
+        const docRef = doc(db, 'pertanyaan', item.id);
+        batch.update(docRef, {
+          urutan: bulkUpdateData.urutan,
+          updated_at: serverTimestamp()
+        });
+      });
+
+      await batch.commit();
+
+      console.log('✅ Bulk update completed');
+      
+      toast({
+        title: 'Berhasil',
+        description: `Berhasil update urutan ${pertanyaanToUpdate.length} pertanyaan "${bulkUpdateData.penyakit}" menjadi ${bulkUpdateData.urutan}`,
+        status: 'success',
+        duration: 4000,
+        isClosable: true,
+      });
+
+      fetchPertanyaan();
+      setBulkUpdateData({ penyakit: '', urutan: 1 });
+      onBulkModalClose();
+      
+    } catch (error) {
+      console.error('❌ Error bulk updating pertanyaan:', error);
+      toast({
+        title: 'Error',
+        description: 'Gagal update urutan pertanyaan: ' + error.message,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setBulkUpdating(false);
+    }
+  };
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -169,20 +744,40 @@ export default function PertanyaanManagement() {
     }));
   };
 
-  const resetForm = () => {
-    setFormData({
-      pertanyaan_text: '',
-      jenis_penyakit: '',
-      tipe_pertanyaan: 'rating_1_10',
-      keyword_jawaban: '',
-      indikasi: '',
-      saran: '',
-      penanganan: '',
-      rekomendasi: ''
-    });
-    setEditingId(null);
+  const handleBulkInputChange = (e) => {
+    const { name, value } = e.target;
+    setBulkUpdateData(prev => ({
+      ...prev,
+      [name]: name === 'urutan' ? parseInt(value) || 1 : value
+    }));
   };
 
+  const handleNumberChange = (name, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [name]: parseInt(value) || 1
+    }));
+  };
+
+  // FUNGSI EDIT PERTANYAAN - DIPERBAIKI
+  const handleEdit = (item) => {
+    console.log('Editing item:', item);
+    setFormData({
+      pertanyaan_text: item.pertanyaan_text || '',
+      jenis_penyakit: item.jenis_penyakit || '',
+      tipe_pertanyaan: item.tipe_pertanyaan || 'rating_1_10',
+      keyword_jawaban: item.keyword_jawaban || '',
+      indikasi: item.indikasi || '',
+      saran: item.saran || '',
+      penanganan: item.penanganan || '',
+      rekomendasi: item.rekomendasi || '',
+      urutan: item.urutan || 1
+    });
+    setEditingId(item.id);
+    onModalOpen();
+  };
+
+  // FUNGSI SUBMIT PERTANYAAN - DIPERBAIKI
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -215,9 +810,7 @@ export default function PertanyaanManagement() {
         pertanyaan_text: formData.pertanyaan_text.trim(),
         jenis_penyakit: formData.jenis_penyakit.trim(),
         tipe_pertanyaan: formData.tipe_pertanyaan,
-        ...(formData.tipe_pertanyaan === 'essay' && {
-          keyword_jawaban: formData.keyword_jawaban.trim(),
-        }),
+        urutan: formData.urutan || 1,
         indikasi: formData.indikasi.trim(),
         saran: formData.saran.trim(),
         penanganan: formData.penanganan.trim(),
@@ -225,33 +818,43 @@ export default function PertanyaanManagement() {
         updated_at: serverTimestamp()
       };
 
+      if (formData.tipe_pertanyaan === 'essay') {
+        pertanyaanData.keyword_jawaban = formData.keyword_jawaban.trim();
+      }
+
       if (editingId) {
         await updateDoc(doc(db, 'pertanyaan', editingId), pertanyaanData);
-        console.log('✅ Pertanyaan updated:', editingId);
-        
         toast({
           title: 'Berhasil',
           description: 'Pertanyaan berhasil diperbarui',
           status: 'success',
           duration: 3000,
-          isClosable: true,
         });
       } else {
         pertanyaanData.created_at = serverTimestamp();
         await addDoc(collection(db, 'pertanyaan'), pertanyaanData);
-        console.log('✅ Pertanyaan created');
-        
         toast({
           title: 'Berhasil',
           description: 'Pertanyaan berhasil ditambahkan',
           status: 'success',
           duration: 3000,
-          isClosable: true,
         });
       }
 
       fetchPertanyaan();
-      resetForm();
+      // Reset form
+      setFormData({
+        pertanyaan_text: '',
+        jenis_penyakit: '',
+        tipe_pertanyaan: 'rating_1_10',
+        keyword_jawaban: '',
+        indikasi: '',
+        saran: '',
+        penanganan: '',
+        rekomendasi: '',
+        urutan: 1
+      });
+      setEditingId(null);
       onModalClose();
       
     } catch (error) {
@@ -261,88 +864,25 @@ export default function PertanyaanManagement() {
         description: 'Gagal menyimpan pertanyaan: ' + error.message,
         status: 'error',
         duration: 5000,
-        isClosable: true,
       });
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleEdit = (item) => {
-    setFormData({
-      pertanyaan_text: item.pertanyaan_text || '',
-      jenis_penyakit: item.jenis_penyakit || '',
-      tipe_pertanyaan: item.tipe_pertanyaan || 'rating_1_10',
-      keyword_jawaban: item.keyword_jawaban || '',
-      indikasi: item.indikasi || '',
-      saran: item.saran || '',
-      penanganan: item.penanganan || '',
-      rekomendasi: item.rekomendasi || ''
-    });
-    setEditingId(item.id);
-    onModalOpen();
-  };
-
-  const handleDeleteClick = (id) => {
-    setDeleteId(id);
-    onDeleteOpen();
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (!deleteId) return;
-
-    try {
-      await deleteDoc(doc(db, 'pertanyaan', deleteId));
-      console.log('✅ Pertanyaan deleted:', deleteId);
-      
-      toast({
-        title: 'Berhasil',
-        description: 'Pertanyaan berhasil dihapus',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
-
-      fetchPertanyaan();
-      
-    } catch (error) {
-      console.error('❌ Error deleting pertanyaan:', error);
-      toast({
-        title: 'Error',
-        description: 'Gagal menghapus pertanyaan: ' + error.message,
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
-    } finally {
-      onDeleteClose();
-      setDeleteId(null);
-    }
-  };
-
   const uniquePenyakit = [...new Set(pertanyaan.map(item => item.jenis_penyakit))].filter(Boolean);
-  const uniqueTipe = [...new Set(pertanyaan.map(item => item.tipe_pertanyaan))].filter(Boolean);
 
-  const formatDate = (timestamp) => {
-    if (!timestamp) return 'N/A';
-    
-    if (timestamp.toDate) {
-      return timestamp.toDate().toLocaleDateString('id-ID');
+  // Group pertanyaan by penyakit untuk statistik
+  const penyakitStats = pertanyaan.reduce((acc, item) => {
+    if (!acc[item.jenis_penyakit]) {
+      acc[item.jenis_penyakit] = {
+        count: 0,
+        urutan: item.urutan || 999
+      };
     }
-    
-    return new Date(timestamp).toLocaleDateString('id-ID');
-  };
-
-  const getTipeDisplay = (tipe) => {
-    switch (tipe) {
-      case 'rating_1_10':
-        return 'Rating 1-10';
-      case 'essay':
-        return 'Essay';
-      default:
-        return tipe;
-    }
-  };
+    acc[item.jenis_penyakit].count++;
+    return acc;
+  }, {});
 
   if (loading) {
     return (
@@ -364,10 +904,11 @@ export default function PertanyaanManagement() {
           <Box>
             <Heading size="lg" mb={2}>Kelola Pertanyaan Kesehatan</Heading>
             <Text color="gray.600">
-              Kelola pertanyaan untuk sistem diagnosa kesehatan dengan sistem rating 1-10
+              Kelola pertanyaan untuk sistem diagnosa kesehatan - Total: {pertanyaan.length} pertanyaan
             </Text>
           </Box>
 
+          {/* Statistik dan Quick Actions */}
           <SimpleGrid columns={{ base: 1, md: 4 }} spacing={6}>
             <Card bg="blue.50" border="1px" borderColor="blue.200">
               <CardBody>
@@ -414,20 +955,92 @@ export default function PertanyaanManagement() {
             </Card>
           </SimpleGrid>
 
+          {/* Statistik Urutan Penyakit */}
+          {pertanyaan.length > 0 && (
+            <Card>
+              <CardBody>
+                <VStack spacing={4} align="stretch">
+                  <HStack justify="space-between">
+                    <Heading size="md">Statistik Urutan Penyakit</Heading>
+                    <Menu>
+                      <MenuButton as={Button} colorScheme="purple" leftIcon={<FiSettings />}>
+                        Kelola Urutan
+                      </MenuButton>
+                      <MenuList>
+                        <MenuGroup title="Aksi Cepat">
+                          <MenuItem icon={<FiSave />} onClick={onBulkModalOpen}>
+                            Update Urutan Massal
+                          </MenuItem>
+                        </MenuGroup>
+                      </MenuList>
+                    </Menu>
+                  </HStack>
+                  
+                  <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={4}>
+                    {Object.entries(penyakitStats)
+                      .sort(([,a], [,b]) => a.urutan - b.urutan)
+                      .map(([penyakit, stats]) => (
+                        <Card key={penyakit} size="sm" variant="outline">
+                          <CardBody>
+                            <VStack spacing={2} align="start">
+                              <HStack justify="space-between" w="full">
+                                <Badge colorScheme="blue" variant="solid">
+                                  Urutan {stats.urutan}
+                                </Badge>
+                                <Badge colorScheme="green">
+                                  {stats.count} pertanyaan
+                                </Badge>
+                              </HStack>
+                              <Text fontWeight="medium" fontSize="sm">{penyakit}</Text>
+                            </VStack>
+                          </CardBody>
+                        </Card>
+                      ))}
+                  </SimpleGrid>
+                </VStack>
+              </CardBody>
+            </Card>
+          )}
+
+          {/* Tombol Aksi Utama */}
           <Card>
             <CardBody>
               <VStack spacing={4}>
                 <HStack w="full" justify="space-between">
-                  <Button
-                    colorScheme="purple"
-                    leftIcon={<FiPlus />}
-                    onClick={() => {
-                      resetForm();
-                      onModalOpen();
-                    }}
-                  >
-                    Tambah Pertanyaan
-                  </Button>
+                  <HStack>
+                    <Button
+                      colorScheme="purple"
+                      leftIcon={<FiPlus />}
+                      onClick={() => {
+                        setFormData({
+                          pertanyaan_text: '',
+                          jenis_penyakit: '',
+                          tipe_pertanyaan: 'rating_1_10',
+                          keyword_jawaban: '',
+                          indikasi: '',
+                          saran: '',
+                          penanganan: '',
+                          rekomendasi: '',
+                          urutan: 1
+                        });
+                        setEditingId(null);
+                        onModalOpen();
+                      }}
+                    >
+                      Tambah Pertanyaan
+                    </Button>
+                    
+                    {pertanyaan.length === 0 && (
+                      <Button
+                        colorScheme="green"
+                        leftIcon={<FiDatabase />}
+                        onClick={handleAddDefaultQuestions}
+                        isLoading={submitting}
+                      >
+                        Tambah 60 Pertanyaan Default
+                      </Button>
+                    )}
+                  </HStack>
                   
                   <HStack>
                     <Button
@@ -438,14 +1051,24 @@ export default function PertanyaanManagement() {
                     >
                       Refresh
                     </Button>
+                    {pertanyaan.length > 0 && (
+                      <Button
+                        colorScheme="red"
+                        variant="outline"
+                        onClick={onResetOpen}
+                      >
+                        Reset Database
+                      </Button>
+                    )}
                   </HStack>
                 </HStack>
 
+                {/* Filter dan Pencarian */}
                 <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4} w="full">
                   <FormControl>
-                    <FormLabel>Cari Pertanyaan/Keyword</FormLabel>
+                    <FormLabel>Cari Pertanyaan</FormLabel>
                     <Input
-                      placeholder="Cari pertanyaan, penyakit, atau keyword..."
+                      placeholder="Cari pertanyaan atau penyakit..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
@@ -467,7 +1090,7 @@ export default function PertanyaanManagement() {
                   </FormControl>
 
                   <FormControl>
-                    <FormLabel>Filter Tipe Pertanyaan</FormLabel>
+                    <FormLabel>Filter Tipe</FormLabel>
                     <Select
                       value={filterTipe}
                       onChange={(e) => setFilterTipe(e.target.value)}
@@ -482,32 +1105,37 @@ export default function PertanyaanManagement() {
             </CardBody>
           </Card>
 
+          {/* Tabel Pertanyaan */}
           <Card>
             <CardBody>
-              {pertanyaan.length === 0 ? (
+              {loading ? (
+                <VStack spacing={4} align="center" py={8}>
+                  <Spinner size="xl" color="purple.500" />
+                  <Text>Memuat pertanyaan...</Text>
+                </VStack>
+              ) : filteredPertanyaan.length === 0 ? (
                 <Alert status="info" borderRadius="md">
                   <AlertIcon />
                   <Box>
-                    <Text fontWeight="bold">Belum ada pertanyaan</Text>
+                    <Text fontWeight="bold">
+                      {pertanyaan.length === 0 ? 'Belum ada pertanyaan' : 'Tidak ada pertanyaan yang sesuai filter'}
+                    </Text>
                     <Text fontSize="sm">
-                      Tambah pertanyaan pertama Anda untuk sistem diagnosa kesehatan.
+                      {pertanyaan.length === 0 
+                        ? 'Klik "Tambah 60 Pertanyaan Default" untuk memulai' 
+                        : 'Coba ubah filter pencarian Anda'}
                     </Text>
                   </Box>
-                </Alert>
-              ) : filteredPertanyaan.length === 0 ? (
-                <Alert status="warning" borderRadius="md">
-                  <AlertIcon />
-                  <Text>Tidak ada pertanyaan yang sesuai dengan filter.</Text>
                 </Alert>
               ) : (
                 <Box overflowX="auto">
                   <Table variant="simple">
                     <Thead>
                       <Tr>
+                        <Th>Urutan</Th>
                         <Th>Pertanyaan</Th>
                         <Th>Jenis Penyakit</Th>
                         <Th>Tipe</Th>
-                        <Th>Indikasi</Th>
                         <Th>Tanggal</Th>
                         <Th>Aksi</Th>
                       </Tr>
@@ -515,43 +1143,30 @@ export default function PertanyaanManagement() {
                     <Tbody>
                       {filteredPertanyaan.map((item) => (
                         <Tr key={item.id} _hover={{ bg: 'gray.50' }}>
+                          <Td>
+                            <Badge colorScheme="purple">
+                              {item.urutan || '-'}
+                            </Badge>
+                          </Td>
                           <Td maxW="400px">
-                            <VStack align="start" spacing={1}>
-                              <Text fontWeight="medium" noOfLines={3}>
-                                {item.pertanyaan_text}
-                              </Text>
-                              {item.keyword_jawaban && (
-                                <Text fontSize="xs" color="gray.600" noOfLines={1}>
-                                  🔑 Keyword: {item.keyword_jawaban}
-                                </Text>
-                              )}
-                            </VStack>
+                            <Text fontWeight="medium" noOfLines={3}>
+                              {item.pertanyaan_text}
+                            </Text>
                           </Td>
                           <Td>
-                            <Badge colorScheme="blue" variant="subtle">
+                            <Badge colorScheme="blue">
                               {item.jenis_penyakit}
                             </Badge>
                           </Td>
                           <Td>
-                            <Badge 
-                              colorScheme={item.tipe_pertanyaan === 'essay' ? 'purple' : 'green'}
-                              display="flex"
-                              alignItems="center"
-                              gap={1}
-                              px={2}
-                              py={1}
-                            >
-                              {item.tipe_pertanyaan === 'essay' ? <FiFileText size={12} /> : <FiCheckCircle size={12} />}
-                              {getTipeDisplay(item.tipe_pertanyaan)}
+                            <Badge colorScheme="green">
+                              {item.tipe_pertanyaan === 'essay' ? 'Essay' : 'Rating 1-10'}
                             </Badge>
                           </Td>
-                          <Td maxW="200px">
-                            <Text fontSize="sm" noOfLines={2}>
-                              {item.indikasi || '-'}
-                            </Text>
-                          </Td>
                           <Td>
-                            <Text fontSize="sm">{formatDate(item.created_at)}</Text>
+                            <Text fontSize="sm">
+                              {item.created_at?.toDate?.().toLocaleDateString('id-ID') || 'N/A'}
+                            </Text>
                           </Td>
                           <Td>
                             <HStack spacing={2}>
@@ -568,7 +1183,10 @@ export default function PertanyaanManagement() {
                                 size="sm"
                                 colorScheme="red"
                                 variant="ghost"
-                                onClick={() => handleDeleteClick(item.id)}
+                                onClick={() => {
+                                  setDeleteId(item.id);
+                                  onDeleteOpen();
+                                }}
                                 aria-label="Delete pertanyaan"
                               />
                             </HStack>
@@ -584,6 +1202,7 @@ export default function PertanyaanManagement() {
         </VStack>
       </Container>
 
+      {/* Modal Tambah/Edit Pertanyaan - DIPERBAIKI */}
       <Modal isOpen={isModalOpen} onClose={onModalClose} size="4xl">
         <ModalOverlay />
         <ModalContent>
@@ -595,7 +1214,7 @@ export default function PertanyaanManagement() {
             <Tabs>
               <TabList>
                 <Tab>Informasi Dasar</Tab>
-                <Tab>Informasi Medis</Tab>
+                <Tab>Informasi Medis (Opsional)</Tab>
               </TabList>
 
               <TabPanels>
@@ -618,8 +1237,27 @@ export default function PertanyaanManagement() {
                         name="jenis_penyakit"
                         value={formData.jenis_penyakit}
                         onChange={handleInputChange}
-                        placeholder="Contoh: Anemia, Diabetes, Hipertensi"
+                        placeholder="Contoh: Sistem Pernapasan, Sistem Kardiovaskuler, Endokrin, dll"
                       />
+                    </FormControl>
+
+                    <FormControl isRequired>
+                      <FormLabel>Urutan Penyakit</FormLabel>
+                      <NumberInput
+                        value={formData.urutan}
+                        onChange={(value) => handleNumberChange('urutan', value)}
+                        min={1}
+                        max={100}
+                      >
+                        <NumberInputField />
+                        <NumberInputStepper>
+                          <NumberIncrementStepper />
+                          <NumberDecrementStepper />
+                        </NumberInputStepper>
+                      </NumberInput>
+                      <Text fontSize="sm" color="gray.500" mt={1}>
+                        Urutan tampil penyakit dalam skrining (1 = pertama, 2 = kedua, dst)
+                      </Text>
                     </FormControl>
 
                     <FormControl isRequired>
@@ -651,7 +1289,7 @@ export default function PertanyaanManagement() {
                     )}
 
                     <FormControl>
-                      <FormLabel>Indikasi</FormLabel>
+                      <FormLabel>Indikasi (Opsional)</FormLabel>
                       <Input
                         name="indikasi"
                         value={formData.indikasi}
@@ -667,7 +1305,7 @@ export default function PertanyaanManagement() {
                     <Alert status="info" borderRadius="md">
                       <AlertIcon />
                       <Box>
-                        <Text fontWeight="bold" mb={1}>Informasi Rekomendasi</Text>
+                        <Text fontWeight="bold" mb={1}>Informasi Rekomendasi (Opsional)</Text>
                         <Text fontSize="sm">
                           Informasi ini akan ditampilkan kepada pengguna berdasarkan hasil skrining.
                         </Text>
@@ -675,7 +1313,7 @@ export default function PertanyaanManagement() {
                     </Alert>
 
                     <FormControl>
-                      <FormLabel>Saran</FormLabel>
+                      <FormLabel>Saran (Opsional)</FormLabel>
                       <Textarea
                         name="saran"
                         value={formData.saran}
@@ -686,7 +1324,7 @@ export default function PertanyaanManagement() {
                     </FormControl>
 
                     <FormControl>
-                      <FormLabel>Penanganan</FormLabel>
+                      <FormLabel>Penanganan (Opsional)</FormLabel>
                       <Textarea
                         name="penanganan"
                         value={formData.penanganan}
@@ -697,7 +1335,7 @@ export default function PertanyaanManagement() {
                     </FormControl>
 
                     <FormControl>
-                      <FormLabel>Rekomendasi</FormLabel>
+                      <FormLabel>Rekomendasi (Opsional)</FormLabel>
                       <Textarea
                         name="rekomendasi"
                         value={formData.rekomendasi}
@@ -736,6 +1374,121 @@ export default function PertanyaanManagement() {
         </ModalContent>
       </Modal>
 
+      {/* Modal Bulk Update Urutan */}
+      <Modal isOpen={isBulkModalOpen} onClose={onBulkModalClose} size="md">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>
+            Update Urutan Massal
+          </ModalHeader>
+          <ModalCloseButton />
+          <ModalBody pb={6}>
+            <VStack spacing={4}>
+              <Alert status="info" borderRadius="md">
+                <AlertIcon />
+                <Text fontSize="sm">
+                  Update urutan untuk semua pertanyaan dengan jenis penyakit yang sama sekaligus.
+                </Text>
+              </Alert>
+
+              <FormControl isRequired>
+                <FormLabel>Pilih Jenis Penyakit</FormLabel>
+                <Select
+                  name="penyakit"
+                  value={bulkUpdateData.penyakit}
+                  onChange={handleBulkInputChange}
+                  placeholder="Pilih penyakit"
+                >
+                  {uniquePenyakit.map(penyakit => (
+                    <option key={penyakit} value={penyakit}>
+                      {penyakit} ({penyakitStats[penyakit]?.count || 0} pertanyaan)
+                    </option>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <FormControl isRequired>
+                <FormLabel>Urutan Baru</FormLabel>
+                <NumberInput
+                  value={bulkUpdateData.urutan}
+                  onChange={(value) => setBulkUpdateData(prev => ({ ...prev, urutan: parseInt(value) || 1 }))}
+                  min={1}
+                  max={100}
+                >
+                  <NumberInputField />
+                  <NumberInputStepper>
+                    <NumberIncrementStepper />
+                    <NumberDecrementStepper />
+                  </NumberInputStepper>
+                </NumberInput>
+                <Text fontSize="sm" color="gray.500" mt={1}>
+                  Urutan baru untuk semua pertanyaan "{bulkUpdateData.penyakit}"
+                </Text>
+              </FormControl>
+
+              {bulkUpdateData.penyakit && (
+                <Alert status="warning" borderRadius="md">
+                  <AlertIcon />
+                  <Box>
+                    <Text fontWeight="bold" mb={1}>Akan mengupdate:</Text>
+                    <Text fontSize="sm">
+                      {penyakitStats[bulkUpdateData.penyakit]?.count || 0} pertanyaan dengan penyakit "{bulkUpdateData.penyakit}"
+                    </Text>
+                    <Text fontSize="sm">
+                      Urutan saat ini: {pertanyaan.find(p => p.jenis_penyakit === bulkUpdateData.penyakit)?.urutan || 'Belum diatur'}
+                    </Text>
+                  </Box>
+                </Alert>
+              )}
+            </VStack>
+
+            <HStack w="full" justify="flex-end" spacing={3} pt={6} borderTop="1px" borderColor="gray.200">
+              <Button onClick={onBulkModalClose} variant="outline">
+                Batal
+              </Button>
+              <Button
+                colorScheme="purple"
+                isLoading={bulkUpdating}
+                loadingText="Updating..."
+                onClick={handleBulkUpdate}
+                isDisabled={!bulkUpdateData.penyakit}
+              >
+                Update Massal
+              </Button>
+            </HStack>
+          </ModalBody>
+        </ModalContent>
+      </Modal>
+
+      {/* Modal untuk Reset Database */}
+      <AlertDialog
+        isOpen={isResetOpen}
+        leastDestructiveRef={cancelRef}
+        onClose={onResetClose}
+      >
+        <AlertDialogOverlay>
+          <AlertDialogContent>
+            <AlertDialogHeader fontSize="lg" fontWeight="bold">
+              Reset Database
+            </AlertDialogHeader>
+
+            <AlertDialogBody>
+              Apakah Anda yakin ingin menghapus SEMUA pertanyaan? Tindakan ini tidak dapat dibatalkan dan akan menghapus {pertanyaan.length} pertanyaan.
+            </AlertDialogBody>
+
+            <AlertDialogFooter>
+              <Button ref={cancelRef} onClick={onResetClose}>
+                Batal
+              </Button>
+              <Button colorScheme="red" onClick={handleResetDatabase} ml={3} isLoading={submitting}>
+                Hapus Semua
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialogOverlay>
+      </AlertDialog>
+
+      {/* Modal untuk Delete Single */}
       <AlertDialog
         isOpen={isDeleteOpen}
         leastDestructiveRef={cancelRef}
@@ -748,14 +1501,36 @@ export default function PertanyaanManagement() {
             </AlertDialogHeader>
 
             <AlertDialogBody>
-              Apakah Anda yakin ingin menghapus pertanyaan ini? Tindakan ini tidak dapat dibatalkan.
+              Apakah Anda yakin ingin menghapus pertanyaan ini?
             </AlertDialogBody>
 
             <AlertDialogFooter>
               <Button ref={cancelRef} onClick={onDeleteClose}>
                 Batal
               </Button>
-              <Button colorScheme="red" onClick={handleDeleteConfirm} ml={3}>
+              <Button colorScheme="red" onClick={async () => {
+                if (!deleteId) return;
+                try {
+                  await deleteDoc(doc(db, 'pertanyaan', deleteId));
+                  toast({
+                    title: 'Berhasil',
+                    description: 'Pertanyaan berhasil dihapus',
+                    status: 'success',
+                    duration: 3000,
+                  });
+                  fetchPertanyaan();
+                } catch (error) {
+                  toast({
+                    title: 'Error',
+                    description: 'Gagal menghapus pertanyaan',
+                    status: 'error',
+                    duration: 5000,
+                  });
+                } finally {
+                  onDeleteClose();
+                  setDeleteId(null);
+                }
+              }} ml={3}>
                 Hapus
               </Button>
             </AlertDialogFooter>
