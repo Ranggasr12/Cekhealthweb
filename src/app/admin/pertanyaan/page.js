@@ -85,7 +85,7 @@ import {
 import { db } from '@/lib/firebase';
 import AdminLayout from '@/components/AdminLayout';
 
-// Data semua pertanyaan default - DIUBAH: Kardiovaskuler menjadi Endokrin
+// Data semua pertanyaan default - DIUBAH: Menambahkan 2 kelompok baru
 const SEMUA_PERTANYAAN = [
   // ==================== SISTEM PERNAPASAN - URUTAN 1 ====================
   {
@@ -397,7 +397,7 @@ const SEMUA_PERTANYAAN = [
     urutan: 10
   },
 
-  // ==================== ENDOKRIN (TAMBAHAN) - URUTAN 6 ====================
+  // ==================== ENDOKRIN - URUTAN 6 ====================
   {
     pertanyaan_text: "Seberapa besar perubahan berat badan yang Anda rasakan (naik atau turun drastis) dalam beberapa waktu terakhir?",
     jenis_penyakit: "Endokrin",
@@ -455,6 +455,130 @@ const SEMUA_PERTANYAAN = [
   {
     pertanyaan_text: "Seberapa sering Anda merasa sangat haus atau sering buang air kecil karena kondisi Anda?",
     jenis_penyakit: "Endokrin",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 10
+  },
+
+  // ==================== ISTIRAHAT & TIDUR - URUTAN 7 ====================
+  {
+    pertanyaan_text: "Seberapa sering tidur Anda terganggu atau mudah terbangun selama 7 hari terakhir?",
+    jenis_penyakit: "Istirahat & Tidur",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 1
+  },
+  {
+    pertanyaan_text: "Seberapa sulit Anda untuk memulai tidur saat berbaring?",
+    jenis_penyakit: "Istirahat & Tidur",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 2
+  },
+  {
+    pertanyaan_text: "Seberapa buruk kondisi Anda saat bangun tidur (lelah, tidak bugar)?",
+    jenis_penyakit: "Istirahat & Tidur",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 3
+  },
+  {
+    pertanyaan_text: "Seberapa sering Anda merasa sangat mengantuk di siang hari?",
+    jenis_penyakit: "Istirahat & Tidur",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 4
+  },
+  {
+    pertanyaan_text: "Seberapa sering tidur Anda terganggu oleh mimpi buruk atau gelisah?",
+    jenis_penyakit: "Istirahat & Tidur",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 5
+  },
+  {
+    pertanyaan_text: "Seberapa sering Anda terbangun karena harus buang air kecil?",
+    jenis_penyakit: "Istirahat & Tidur",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 6
+  },
+  {
+    pertanyaan_text: "Seberapa mengganggu kebisingan, cahaya, suhu, atau lingkungan saat Anda tidur?",
+    jenis_penyakit: "Istirahat & Tidur",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 7
+  },
+  {
+    pertanyaan_text: "Seberapa sering pikiran Anda tidak tenang sehingga sulit tidur?",
+    jenis_penyakit: "Istirahat & Tidur",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 8
+  },
+  {
+    pertanyaan_text: "Seberapa sering Anda merasa tidak nyaman dan harus sering mengubah posisi tidur?",
+    jenis_penyakit: "Istirahat & Tidur",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 9
+  },
+  {
+    pertanyaan_text: "Seberapa besar kebutuhan Anda terhadap bantuan untuk dapat tidur?",
+    jenis_penyakit: "Istirahat & Tidur",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 10
+  },
+
+  // ==================== SISTEM PERSYARAFAN - URUTAN 8 ====================
+  {
+    pertanyaan_text: "Seberapa berat sakit kepala yang Anda rasakan selama 24 jam terakhir?",
+    jenis_penyakit: "Sistem Persyarafan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 1
+  },
+  {
+    pertanyaan_text: "Seberapa sering atau berat rasa pusing/melayang yang Anda rasakan?",
+    jenis_penyakit: "Sistem Persyarafan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 2
+  },
+  {
+    pertanyaan_text: "Seberapa mengganggu rasa kesemutan atau baal pada tubuh Anda?",
+    jenis_penyakit: "Sistem Persyarafan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 3
+  },
+  {
+    pertanyaan_text: "Seberapa berat tremor atau getaran pada tangan/kaki Anda?",
+    jenis_penyakit: "Sistem Persyarafan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 4
+  },
+  {
+    pertanyaan_text: "Seberapa berat kelemahan otot yang Anda rasakan saat melakukan aktivitas?",
+    jenis_penyakit: "Sistem Persyarafan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 5
+  },
+  {
+    pertanyaan_text: "Seberapa besar kesulitan Anda dalam berbicara selama 24 jam terakhir?",
+    jenis_penyakit: "Sistem Persyarafan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 6
+  },
+  {
+    pertanyaan_text: "Seberapa berat gangguan penglihatan yang Anda alami saat ini?",
+    jenis_penyakit: "Sistem Persyarafan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 7
+  },
+  {
+    pertanyaan_text: "Seberapa sulit Anda mengingat atau berkonsentrasi?",
+    jenis_penyakit: "Sistem Persyarafan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 8
+  },
+  {
+    pertanyaan_text: "Seberapa berat perasaan gelisah atau cemas yang Anda rasakan?",
+    jenis_penyakit: "Sistem Persyarafan",
+    tipe_pertanyaan: "rating_1_10",
+    urutan: 9
+  },
+  {
+    pertanyaan_text: "Seberapa sering Anda merasa sangat mengantuk, lemah kesadaran, atau sulit responsif?",
+    jenis_penyakit: "Sistem Persyarafan",
     tipe_pertanyaan: "rating_1_10",
     urutan: 10
   }
@@ -599,12 +723,12 @@ export default function PertanyaanManagement() {
     }
   };
 
-  // FUNGSI TAMBAH 60 PERTANYAAN
+  // FUNGSI TAMBAH 80 PERTANYAAN (DARI 60 MENJADI 80)
   const handleAddDefaultQuestions = async () => {
     setSubmitting(true);
     
     try {
-      console.log('🔄 Adding 60 default questions...');
+      console.log('🔄 Adding 80 default questions...');
 
       const existingData = await getDocs(collection(db, 'pertanyaan'));
       if (existingData.size > 0) {
@@ -635,11 +759,11 @@ export default function PertanyaanManagement() {
 
       await batch.commit();
 
-      console.log('✅ 60 pertanyaan berhasil ditambahkan');
+      console.log('✅ 80 pertanyaan berhasil ditambahkan');
       
       toast({
         title: 'Berhasil',
-        description: '60 pertanyaan default berhasil ditambahkan ke database',
+        description: '80 pertanyaan default berhasil ditambahkan ke database',
         status: 'success',
         duration: 5000,
         isClosable: true,
@@ -1037,7 +1161,7 @@ export default function PertanyaanManagement() {
                         onClick={handleAddDefaultQuestions}
                         isLoading={submitting}
                       >
-                        Tambah 60 Pertanyaan Default
+                        Tambah 80 Pertanyaan Default
                       </Button>
                     )}
                   </HStack>
@@ -1122,7 +1246,7 @@ export default function PertanyaanManagement() {
                     </Text>
                     <Text fontSize="sm">
                       {pertanyaan.length === 0 
-                        ? 'Klik "Tambah 60 Pertanyaan Default" untuk memulai' 
+                        ? 'Klik "Tambah 80 Pertanyaan Default" untuk memulai' 
                         : 'Coba ubah filter pencarian Anda'}
                     </Text>
                   </Box>

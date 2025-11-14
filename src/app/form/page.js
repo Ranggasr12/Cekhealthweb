@@ -40,8 +40,14 @@ import {
   ModalCloseButton,
   useDisclosure,
   Badge,
+  Table,
+  Thead,
+  Tbody,
+  Tr,
+  Th,
+  Td,
 } from "@chakra-ui/react";
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { 
   collection, 
   getDocs, 
@@ -97,31 +103,192 @@ const PlayIcon = (props) => (
   </svg>
 );
 
-// Komponen untuk Rating Scale 1-10
-const RatingScale = ({ value, onChange }) => {
+// Mapping penyakit untuk 8 jenis sesuai statistik
+const penyakitMapping = {
+  '1': 'Sistem Pernapasan',
+  '2': 'Sistem Kardiovaskuler',
+  '3': 'Sistem Pencernaan',
+  '4': 'Istirahat & Tidur',
+  '5': 'Sistem Perkemihan',
+  '6': 'Gangguan Nutrisi',
+  '7': 'Sistem Persyarafan',
+  '8': 'Endokrin'
+};
+
+const reversePenyakitMapping = {
+  'Sistem Pernapasan': 1,
+  'Sistem Kardiovaskuler': 2,
+  'Sistem Pencernaan': 3,
+  'Istirahat & Tidur': 4,
+  'Sistem Perkemihan': 5,
+  'Gangguan Nutrisi': 6,
+  'Sistem Persyarafan': 7,
+  'Endokrin': 8
+};
+
+// Data penyakit berdasarkan statistik yang Anda berikan - 8 JENIS
+const penyakitList = [
+  {
+    id: 1,
+    name: 'Sistem Pernapasan',
+    description: 'Pemeriksaan kesehatan paru-paru dan saluran pernapasan',
+    color: 'blue',
+    pertanyaan: 10,
+    icon: '🫁',
+    urutan: 1
+  },
+  {
+    id: 2,
+    name: 'Sistem Kardiovaskuler',
+    description: 'Pemeriksaan kesehatan jantung dan pembuluh darah',
+    color: 'red',
+    pertanyaan: 10,
+    icon: '❤️',
+    urutan: 2
+  },
+  {
+    id: 3,
+    name: 'Sistem Pencernaan',
+    description: 'Pemeriksaan kesehatan lambung, usus, dan organ pencernaan',
+    color: 'orange',
+    pertanyaan: 10,
+    icon: '🍎',
+    urutan: 3
+  },
+  {
+    id: 4,
+    name: 'Istirahat & Tidur',
+    description: 'Pemeriksaan kualitas tidur dan pola istirahat',
+    color: 'purple',
+    pertanyaan: 10,
+    icon: '😴',
+    urutan: 4
+  },
+  {
+    id: 5,
+    name: 'Sistem Perkemihan',
+    description: 'Pemeriksaan kesehatan ginjal dan saluran kemih',
+    color: 'green',
+    pertanyaan: 10,
+    icon: '💧',
+    urutan: 5
+  },
+  {
+    id: 6,
+    name: 'Gangguan Nutrisi',
+    description: 'Pemeriksaan status gizi dan pola makan',
+    color: 'teal',
+    pertanyaan: 10,
+    icon: '⚖️',
+    urutan: 6
+  },
+  {
+    id: 7,
+    name: 'Sistem Persyarafan',
+    description: 'Pemeriksaan kesehatan otak dan sistem saraf',
+    color: 'pink',
+    pertanyaan: 10,
+    icon: '🧠',
+    urutan: 7
+  },
+  {
+    id: 8,
+    name: 'Endokrin',
+    description: 'Pemeriksaan kesehatan hormon dan kelenjar',
+    color: 'yellow',
+    pertanyaan: 10,
+    icon: '⚕️',
+    urutan: 8
+  }
+];
+
+// Komponen untuk Rating Scale 1-10 dengan format tabel seperti borang
+const RatingScaleTable = ({ value, onChange, question, questionNumber }) => {
   const numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  
+  const getRatingLabel = (number) => {
+    if (number === 1) return 'Sangat Tidak Setuju';
+    if (number === 2) return 'Tidak Setuju';
+    if (number === 3) return 'Kurang Setuju';
+    if (number === 4) return 'Sedikit Tidak Setuju';
+    if (number === 5) return 'Netral';
+    if (number === 6) return 'Sedikit Setuju';
+    if (number === 7) return 'Cukup Setuju';
+    if (number === 8) return 'Setuju';
+    if (number === 9) return 'Sangat Setuju';
+    if (number === 10) return 'Sangat Sangat Setuju';
+    return '';
+  };
+
+  const getColorScheme = (number) => {
+    if (number <= 3) return 'red';
+    if (number <= 5) return 'orange';
+    if (number <= 7) return 'yellow';
+    if (number <= 9) return 'blue';
+    return 'green';
+  };
 
   return (
-    <VStack spacing={4} w="100%">
-      <SimpleGrid columns={5} spacing={3} w="100%">
-        {numbers.map((number) => (
-          <Button
-            key={number}
-            size="lg"
-            colorScheme="blue"
-            variant={value === number.toString() ? 'solid' : 'outline'}
-            onClick={() => onChange(number.toString())}
-            borderRadius="full"
-            height="60px"
-            width="60px"
-            minWidth="60px"
-            p={0}
-          >
-            <Text fontSize="xl" fontWeight="bold">{number}</Text>
-          </Button>
-        ))}
-      </SimpleGrid>
-    </VStack>
+    <Box w="100%" overflowX="auto">
+      <Table variant="simple" size="sm" bg="white" borderRadius="md" overflow="hidden">
+        <Thead bg="gray.50">
+          <Tr>
+            <Th fontSize="xs" color="gray.600" borderRight="1px" borderColor="gray.200">
+              <Badge colorScheme="blue" mr={2}>{questionNumber}</Badge>
+              {question}
+            </Th>
+            {numbers.map(number => (
+              <Th key={number} fontSize="xs" color="gray.600" textAlign="center" fontWeight="normal" px={2}>
+                {number}
+              </Th>
+            ))}
+          </Tr>
+        </Thead>
+        <Tbody>
+          <Tr>
+            <Td 
+              borderRight="1px" 
+              borderColor="gray.200" 
+              fontSize="xs" 
+              color="gray.600"
+              whiteSpace="normal"
+            >
+              <Text fontWeight="medium">Tingkat Persetujuan</Text>
+              <Text fontSize="xs">1 = Sangat Tidak Setuju, 10 = Sangat Sangat Setuju</Text>
+            </Td>
+            {numbers.map(number => (
+              <Td key={number} textAlign="center" px={2} py={3}>
+                <Button
+                  size="sm"
+                  colorScheme={getColorScheme(number)}
+                  variant={value === number.toString() ? 'solid' : 'outline'}
+                  onClick={() => onChange(number.toString())}
+                  borderRadius="full"
+                  height="30px"
+                  width="30px"
+                  minWidth="30px"
+                  p={0}
+                  _hover={{ transform: 'scale(1.1)' }}
+                >
+                  <Text fontSize="xs" fontWeight="bold">{number}</Text>
+                </Button>
+              </Td>
+            ))}
+          </Tr>
+        </Tbody>
+      </Table>
+      
+      {/* Legend untuk skala */}
+      <Box mt={3} p={3} bg="gray.50" borderRadius="md">
+        <SimpleGrid columns={5} spacing={2} fontSize="xs">
+          <Text textAlign="center"><strong>1:</strong> Sangat Tidak Setuju</Text>
+          <Text textAlign="center"><strong>3:</strong> Kurang Setuju</Text>
+          <Text textAlign="center"><strong>5:</strong> Netral</Text>
+          <Text textAlign="center"><strong>7:</strong> Cukup Setuju</Text>
+          <Text textAlign="center"><strong>10:</strong> Sangat Sangat Setuju</Text>
+        </SimpleGrid>
+      </Box>
+    </Box>
   );
 };
 
@@ -275,6 +442,8 @@ const VideoPlayerModal = ({ isOpen, onClose, video }) => {
 
 export default function FormPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const selectedPenyakitId = searchParams.get('penyakit');
   const toast = useToast();
   const [isClient, setIsClient] = useState(false);
   const [showResults, setShowResults] = useState(false);
@@ -292,19 +461,28 @@ export default function FormPage() {
   });
   const [jawaban, setJawaban] = useState({});
   
-  // State untuk multi-step berdasarkan penyakit
+  // State untuk multi-step: 0 = Pilih Penyakit, 1 = Data Diri, 2+ = Pertanyaan
   const [currentStep, setCurrentStep] = useState(0);
   const [groupedQuestions, setGroupedQuestions] = useState({});
   const [diseaseSteps, setDiseaseSteps] = useState([]);
   const [progress, setProgress] = useState(0);
+  const [selectedPenyakit, setSelectedPenyakit] = useState(null);
 
   // State untuk navigasi hasil
   const [currentResultIndex, setCurrentResultIndex] = useState(0);
 
   useEffect(() => {
     setIsClient(true);
-    fetchPertanyaan();
-  }, []);
+    
+    // Jika ada penyakit yang dipilih dari URL, langsung set ke step data diri
+    if (selectedPenyakitId) {
+      const penyakit = penyakitList.find(p => p.id.toString() === selectedPenyakitId);
+      if (penyakit) {
+        setSelectedPenyakit(penyakit);
+        setCurrentStep(1); // Langsung ke data diri
+      }
+    }
+  }, [selectedPenyakitId]);
 
   // Fetch pertanyaan dari Firestore dan group by penyakit
   const fetchPertanyaan = async () => {
@@ -316,12 +494,23 @@ export default function FormPage() {
         orderBy('urutan', 'asc')
       );
       const querySnapshot = await getDocs(q);
-      const pertanyaanData = querySnapshot.docs.map(doc => ({
+      let pertanyaanData = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
-      
+
       console.log('📋 SEMUA PERTANYAAN:', pertanyaanData);
+
+      // FILTER BERDASARKAN PENYAKIT YANG DIPILIH
+      if (selectedPenyakit) {
+        const selectedPenyakitName = selectedPenyakit.name;
+        if (selectedPenyakitName) {
+          pertanyaanData = pertanyaanData.filter(q => 
+            q.jenis_penyakit?.includes(selectedPenyakitName)
+          );
+          console.log(`🔍 Filter pertanyaan untuk: ${selectedPenyakitName}`, pertanyaanData);
+        }
+      }
 
       // Group pertanyaan berdasarkan penyakit
       const grouped = {};
@@ -371,7 +560,7 @@ export default function FormPage() {
     }
   };
 
-  // Fetch materi penyakit - PERBAIKAN BESAR DI SINI
+  // Fetch materi penyakit
   const fetchMateriPenyakit = async (penyakitNames) => {
     if (penyakitNames.length === 0) return;
     
@@ -465,7 +654,7 @@ export default function FormPage() {
     onVideoModalOpen();
   };
 
-  // Komponen Video Gallery - PERBAIKAN DI SINI
+  // Komponen Video Gallery
   const VideoGallerySection = ({ penyakit }) => {
     if (!penyakit || !penyakit.name) {
       console.log('❌ Penyakit tidak valid:', penyakit);
@@ -532,7 +721,7 @@ export default function FormPage() {
     );
   };
 
-  // Komponen untuk menampilkan SEMUA pertanyaan dalam satu penyakit dengan nomor urut
+  // Komponen untuk menampilkan SEMUA pertanyaan dalam satu penyakit dengan format tabel
   const DiseaseQuestionsPage = ({ diseaseName, questions }) => {
     // Urutkan pertanyaan berdasarkan urutan jika ada
     const sortedQuestions = [...questions].sort((a, b) => {
@@ -547,14 +736,14 @@ export default function FormPage() {
           <HStack justify="space-between" align="center">
             <Box>
               <Badge colorScheme="blue" fontSize="md" mb={2}>
-                Kelompok Penyakit: {diseaseName}
+                Borang Kaji Selidik: {diseaseName}
               </Badge>
               <Text fontSize="sm" color="gray.600">
-                {sortedQuestions.length} pertanyaan untuk dijawab
+                {sortedQuestions.length} pernyataan untuk dinilai (Skala 1-10)
               </Text>
             </Box>
             <Badge colorScheme="purple" fontSize="md">
-              Step {currentStep} dari {diseaseSteps.length}
+              Step {currentStep} dari {diseaseSteps.length + 1}
             </Badge>
           </HStack>
         </Box>
@@ -562,19 +751,92 @@ export default function FormPage() {
         <VStack spacing={8} align="stretch">
           {sortedQuestions.map((question, index) => (
             <FormControl key={question.id} mb={8} isRequired>
-              <FormLabel fontSize="lg" fontWeight="medium" mb={4}>
-                <Badge colorScheme="blue" mr={2} fontSize="md">
-                  {index + 1}
-                </Badge>
-                {question.pertanyaan_text}
-              </FormLabel>
-              <RatingScale
+              <RatingScaleTable
                 value={jawaban[question.id] || ''}
                 onChange={(value) => handleRatingChange(question.id, value)}
+                question={question.pertanyaan_text}
+                questionNumber={index + 1}
               />
             </FormControl>
           ))}
         </VStack>
+      </Box>
+    );
+  };
+
+  // Komponen untuk memilih penyakit
+  const DiseaseSelectionPage = () => {
+    return (
+      <Box w="100%">
+        {/* JUDUL TUNGGAL - TIDAK ADA DUPLIKASI */}
+        <Box textAlign="center" mb={8}>
+          <Heading as="h1" size="2xl" mb={3} color="purple.800">
+          </Heading>
+          <Text color="gray.600" fontSize="lg">
+          </Text>
+        </Box>
+
+        <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6} w="100%">
+          {penyakitList.map((penyakit) => (
+            <Card 
+              key={penyakit.id}
+              borderRadius="xl"
+              boxShadow="lg"
+              border="1px"
+              borderColor="gray.100"
+              transition="all 0.3s"
+              _hover={{
+                transform: "translateY(-4px)",
+                boxShadow: "2xl",
+              }}
+              cursor="pointer"
+              onClick={() => {
+                setSelectedPenyakit(penyakit);
+                setCurrentStep(1); // Pindah ke data diri
+              }}
+            >
+              <CardBody p={6}>
+                <VStack spacing={4} align="start">
+                  <HStack justify="space-between" w="100%">
+                    <Box>
+                      <Text fontSize="3xl" mb={2}>{penyakit.icon}</Text>
+                      <Heading as="h3" size="lg" color="gray.800">
+                        {penyakit.name}
+                      </Heading>
+                    </Box>
+                    <Badge colorScheme={penyakit.color} fontSize="md" px={3} py={1}>
+                      Urutan {penyakit.urutan}
+                    </Badge>
+                  </HStack>
+                  
+                  <Text color="gray.600" lineHeight="1.6">
+                    {penyakit.description}
+                  </Text>
+                  
+                  <HStack w="100%" justify="space-between">
+                    <Badge colorScheme="blue" variant="outline">
+                      {penyakit.pertanyaan} pertanyaan
+                    </Badge>
+                    <Button
+                      colorScheme={penyakit.color}
+                      variant="outline"
+                      size="sm"
+                    >
+                      Pilih
+                    </Button>
+                  </HStack>
+                </VStack>
+              </CardBody>
+            </Card>
+          ))}
+        </SimpleGrid>
+
+        {/* Info Tambahan */}
+        <Box textAlign="center" mt={8}>
+          <Text color="gray.500" fontSize="sm">
+            Pilih salah satu sistem tubuh di atas untuk memulai pemeriksaan kesehatan Anda
+          </Text>
+        </Box>
       </Box>
     );
   };
@@ -590,30 +852,30 @@ export default function FormPage() {
       minute: '2-digit'
     });
 
-    let content = `HASIL SKRINING KESEHATAN - CEKHEALTH\n`;
+    let content = `HASIL KUESIONER KESEHATAN - CEKHEALTH\n`;
     content += `========================================\n\n`;
     
-    content += `INFORMASI PASIEN:\n`;
+    content += `INFORMASI RESPONDEN:\n`;
     content += `- Nama: ${formData.nama}\n`;
     content += `- Usia: ${formData.usia} tahun\n`;
     content += `- Jenis Kelamin: ${formData.jenisKelamin}\n`;
-    content += `- Tanggal Pemeriksaan: ${timestamp}\n\n`;
+    content += `- Tanggal Pengisian: ${timestamp}\n\n`;
     
-    content += `STATISTIK SKRINING:\n`;
-    content += `- Total Pertanyaan: ${results.totalPertanyaan}\n`;
-    content += `- Pertanyaan Terjawab: ${results.pertanyaanTerjawab}\n`;
+    content += `STATISTIK KUESIONER:\n`;
+    content += `- Total Pernyataan: ${results.totalPertanyaan}\n`;
+    content += `- Pernyataan Terjawab: ${results.pertanyaanTerjawab}\n`;
     content += `- Total Skor: ${results.totalSkor}/${results.maxSkor}\n`;
     content += `- Persentase: ${results.persentase}%\n`;
-    content += `- Penyakit Terdeteksi: ${results.detectedDiseases.length}\n\n`;
+    content += `- Kategori Dinilai: ${results.detectedDiseases.length}\n\n`;
     
-    content += `HASIL DETEKSI PENYAKIT:\n`;
+    content += `HASIL ANALISIS:\n`;
     content += `=======================\n\n`;
     
     results.detectedDiseases.forEach((disease, index) => {
       content += `${index + 1}. ${disease.name.toUpperCase()}\n`;
-      content += `   - Skor: ${disease.totalScore}/${disease.maxScore}\n`;
+      content += `   - Skor Rata-rata: ${disease.totalScore}/${disease.maxScore}\n`;
       content += `   - Persentase: ${disease.persentase}%\n`;
-      content += `   - Kategori Risiko: ${disease.riskCategory}\n\n`;
+      content += `   - Tingkat Persetujuan: ${disease.riskCategory}\n\n`;
       
       if (disease.rekomendasi && disease.rekomendasi.length > 0) {
         content += `   REKOMENDASI:\n`;
@@ -624,9 +886,12 @@ export default function FormPage() {
       }
     });
     
-    content += `DISCLAIMER MEDIS:\n`;
+    content += `SKALA PENILAIAN:\n`;
+    content += `1 = Sangat Tidak Setuju, 3 = Kurang Setuju, 5 = Netral, 7 = Cukup Setuju, 10 = Sangat Sangat Setuju\n\n`;
+    
+    content += `DISCLAIMER:\n`;
     content += `=================\n`;
-    content += `Hasil skrining ini merupakan alat bantu diagnosis awal dan tidak menggantikan konsultasi dengan tenaga medis profesional. Selalu konsultasikan kondisi kesehatan Anda dengan dokter untuk diagnosis dan penanganan yang tepat.\n\n`;
+    content += `Hasil kuesioner ini merupakan alat bantu assessment dan tidak menggantikan konsultasi dengan tenaga medis profesional.\n\n`;
     
     content += `www.cekhealth.com\n`;
 
@@ -634,7 +899,7 @@ export default function FormPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `hasil-skrining-${formData.nama.replace(/\s+/g, '-').toLowerCase()}-${new Date().getTime()}.txt`;
+    link.download = `hasil-kuesioner-${formData.nama.replace(/\s+/g, '-').toLowerCase()}-${new Date().getTime()}.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -642,7 +907,7 @@ export default function FormPage() {
 
     toast({
       title: 'Berhasil Download',
-      description: 'Hasil skrining telah diunduh dalam format TXT',
+      description: 'Hasil kuesioner telah diunduh dalam format TXT',
       status: 'success',
       duration: 3000,
     });
@@ -680,18 +945,18 @@ export default function FormPage() {
     doc.setFontSize(20);
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
-    doc.text('HASIL SKRINING KESEHATAN', pageWidth / 2, 25, { align: 'center' });
+    doc.text('HASIL KUESIONER KESEHATAN', pageWidth / 2, 25, { align: 'center' });
     
     doc.setFontSize(12);
     doc.setFont('helvetica', 'normal');
-    doc.text('Sistem Pemeriksaan Kesehatan Digital - CEKHEALTH', pageWidth / 2, 35, { align: 'center' });
+    doc.text('Sistem Assessment Kesehatan Digital - CEKHEALTH', pageWidth / 2, 35, { align: 'center' });
     
     doc.setFontSize(10);
     doc.text(`Tanggal: ${new Date().toLocaleDateString('id-ID')}`, pageWidth / 2, 45, { align: 'center' });
 
     yPosition = 70;
 
-    // Informasi Pasien
+    // Informasi Responden
     checkPageBreak(40);
     doc.setFillColor(colors.secondary[0], colors.secondary[1], colors.secondary[2]);
     doc.roundedRect(margin, yPosition, pageWidth - 2 * margin, 8, 2, 2, 'F');
@@ -699,7 +964,7 @@ export default function FormPage() {
     doc.setFontSize(10);
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
-    doc.text('INFORMASI PASIEN', margin + 5, yPosition + 5.5);
+    doc.text('INFORMASI RESPONDEN', margin + 5, yPosition + 5.5);
 
     yPosition += 15;
 
@@ -726,7 +991,7 @@ export default function FormPage() {
 
     yPosition += 40;
 
-    // Hasil Deteksi
+    // Hasil Analisis
     checkPageBreak(30);
     doc.setFillColor(colors.primary[0], colors.primary[1], colors.primary[2]);
     doc.roundedRect(margin, yPosition, pageWidth - 2 * margin, 8, 2, 2, 'F');
@@ -734,16 +999,16 @@ export default function FormPage() {
     doc.setFontSize(10);
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
-    doc.text('HASIL DETEKSI PENYAKIT', margin + 5, yPosition + 5.5);
+    doc.text('HASIL ANALISIS PER KATEGORI', margin + 5, yPosition + 5.5);
 
     yPosition += 15;
 
-    // Hasil untuk setiap penyakit
+    // Hasil untuk setiap kategori
     results.detectedDiseases.forEach((disease, index) => {
       checkPageBreak(60);
 
       let diseaseColor;
-      if (disease.name === "Tidak Terdeteksi Penyakit Serius") {
+      if (disease.name === "Tidak Terdeteksi Masalah Serius") {
         diseaseColor = [46, 204, 113];
       } else if (disease.riskCategory === "Tinggi") {
         diseaseColor = colors.accent;
@@ -767,13 +1032,13 @@ export default function FormPage() {
       doc.setTextColor(colors.darkText[0], colors.darkText[1], colors.darkText[2]);
       doc.setFont('helvetica', 'normal');
       
-      const confidenceText = `Skor: ${disease.totalScore}/${disease.maxScore} | Persentase: ${disease.persentase}% | Kategori Risiko: ${disease.riskCategory}`;
+      const confidenceText = `Skor Rata-rata: ${disease.totalScore}/${disease.maxScore} | Persentase: ${disease.persentase}% | Tingkat: ${disease.riskCategory}`;
       doc.text(confidenceText, margin + 5, yPosition);
       yPosition += 8;
 
-      const description = disease.name === "Tidak Terdeteksi Penyakit Serius" 
-        ? "Berdasarkan hasil skrining, tidak terdeteksi indikasi penyakit serius. Pertahankan pola hidup sehat dan lakukan pemeriksaan rutin."
-        : `Terdeteksi indikasi ${disease.name.toLowerCase()} dengan persentase ${disease.persentase}%. Hasil ini merupakan peringatan dini dan memerlukan konsultasi lebih lanjut dengan tenaga kesehatan.`;
+      const description = disease.name === "Tidak Terdeteksi Masalah Serius" 
+        ? "Berdasarkan hasil kuesioner, tidak terdeteksi indikasi masalah kesehatan serius."
+        : `Terdeteksi indikasi ${disease.name.toLowerCase()} dengan tingkat persetujuan ${disease.riskCategory.toLowerCase()}.`;
       
       const splitDesc = doc.splitTextToSize(description, pageWidth - 2 * margin - 10);
       doc.text(splitDesc, margin + 5, yPosition);
@@ -802,6 +1067,31 @@ export default function FormPage() {
       yPosition += 10;
     });
 
+    // Skala Penilaian
+    checkPageBreak(25);
+    doc.setFillColor(colors.secondary[0], colors.secondary[1], colors.secondary[2]);
+    doc.roundedRect(margin, yPosition, pageWidth - 2 * margin, 8, 2, 2, 'F');
+    
+    doc.setFontSize(10);
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.text('SKALA PENILAIAN', margin + 5, yPosition + 5.5);
+
+    yPosition += 15;
+
+    const scaleText = [
+      "1 = Sangat Tidak Setuju | 2 = Tidak Setuju | 3 = Kurang Setuju | 4 = Sedikit Tidak Setuju",
+      "5 = Netral | 6 = Sedikit Setuju | 7 = Cukup Setuju | 8 = Setuju | 9 = Sangat Setuju | 10 = Sangat Sangat Setuju"
+    ];
+
+    scaleText.forEach(text => {
+      const splitText = doc.splitTextToSize(text, pageWidth - 2 * margin - 10);
+      doc.setFontSize(8);
+      doc.setTextColor(colors.darkText[0], colors.darkText[1], colors.darkText[2]);
+      doc.text(splitText, margin + 5, yPosition);
+      yPosition += splitText.length * 3 + 4;
+    });
+
     // Footer & Disclaimer
     checkPageBreak(35);
     const footerY = doc.internal.pageSize.getHeight() - 35;
@@ -815,7 +1105,7 @@ export default function FormPage() {
     doc.setFont('helvetica', 'italic');
     
     const disclaimerLines = [
-      "Hasil skrining ini merupakan alat bantu diagnosis awal dan tidak menggantikan konsultasi dengan tenaga medis profesional.",
+      "Hasil kuesioner ini merupakan alat bantu assessment dan tidak menggantikan konsultasi dengan tenaga medis profesional.",
       "Selalu konsultasikan kondisi kesehatan Anda dengan dokter untuk diagnosis dan penanganan yang tepat.",
       `Dokumen ini dibuat secara otomatis pada ${new Date().toLocaleDateString('id-ID')} - www.cekhealth.com`
     ];
@@ -825,12 +1115,12 @@ export default function FormPage() {
       doc.text(splitText, pageWidth / 2, footerY + 6 + (index * 10), { align: 'center' });
     });
 
-    const fileName = `hasil-skrining-${formData.nama.replace(/\s+/g, '-').toLowerCase()}-${new Date().getTime()}.pdf`;
+    const fileName = `hasil-kuesioner-${formData.nama.replace(/\s+/g, '-').toLowerCase()}-${new Date().getTime()}.pdf`;
     doc.save(fileName);
 
     toast({
       title: 'Berhasil Download',
-      description: 'Hasil skrining telah diunduh dalam format PDF',
+      description: 'Hasil kuesioner telah diunduh dalam format PDF',
       status: 'success',
       duration: 3000,
     });
@@ -848,32 +1138,34 @@ export default function FormPage() {
 
   // Validasi form
   const validateForm = () => {
-    if (!formData.nama.trim()) {
-      toast({ title: 'Data tidak lengkap', description: 'Nama lengkap harus diisi', status: 'warning', duration: 3000 });
-      return false;
-    }
-    if (!formData.usia || formData.usia < 1 || formData.usia > 120) {
-      toast({ title: 'Data tidak lengkap', description: 'Usia harus antara 1-120 tahun', status: 'warning', duration: 3000 });
-      return false;
-    }
-    if (!formData.jenisKelamin) {
-      toast({ title: 'Data tidak lengkap', description: 'Jenis kelamin harus dipilih', status: 'warning', duration: 3000 });
-      return false;
-    }
-
-    // Validasi semua pertanyaan sudah dijawab
-    const currentDisease = diseaseSteps[currentStep - 1];
-    const questionsForDisease = groupedQuestions[currentDisease] || [];
-    const unansweredQuestions = questionsForDisease.filter(q => !jawaban[q.id]);
-    
-    if (unansweredQuestions.length > 0) {
-      toast({
-        title: 'Pertanyaan Belum Lengkap',
-        description: `Masih ada ${unansweredQuestions.length} pertanyaan yang belum dijawab`,
-        status: 'warning',
-        duration: 5000,
-      });
-      return false;
+    if (currentStep === 1) { // Validasi data diri
+      if (!formData.nama.trim()) {
+        toast({ title: 'Data tidak lengkap', description: 'Nama lengkap harus diisi', status: 'warning', duration: 3000 });
+        return false;
+      }
+      if (!formData.usia || formData.usia < 1 || formData.usia > 120) {
+        toast({ title: 'Data tidak lengkap', description: 'Usia harus antara 1-120 tahun', status: 'warning', duration: 3000 });
+        return false;
+      }
+      if (!formData.jenisKelamin) {
+        toast({ title: 'Data tidak lengkap', description: 'Jenis kelamin harus dipilih', status: 'warning', duration: 3000 });
+        return false;
+      }
+      return true;
+    } else if (currentStep >= 2) { // Validasi pertanyaan
+      const currentDisease = diseaseSteps[currentStep - 2];
+      const questionsForDisease = groupedQuestions[currentDisease] || [];
+      const unansweredQuestions = questionsForDisease.filter(q => !jawaban[q.id]);
+      
+      if (unansweredQuestions.length > 0) {
+        toast({
+          title: 'Pertanyaan Belum Lengkap',
+          description: `Masih ada ${unansweredQuestions.length} pernyataan yang belum dinilai`,
+          status: 'warning',
+          duration: 5000,
+        });
+        return false;
+      }
     }
     return true;
   };
@@ -942,7 +1234,7 @@ export default function FormPage() {
 
     if (detectedDiseases.length === 0) {
       detectedDiseases.push({
-        name: "Tidak Terdeteksi Penyakit Serius",
+        name: "Tidak Terdeteksi Masalah Serius",
         totalScore: 0,
         maxScore: 0,
         persentase: 0,
@@ -987,7 +1279,7 @@ export default function FormPage() {
     const results = calculateResults();
     
     const detectedDiseaseNames = results.detectedDiseases
-      .filter(disease => disease.name !== "Tidak Terdeteksi Penyakit Serius")
+      .filter(disease => disease.name !== "Tidak Terdeteksi Masalah Serius")
       .map(disease => disease.name);
     
     console.log('🦠 Penyakit terdeteksi untuk dicari materinya:', detectedDiseaseNames);
@@ -1010,7 +1302,7 @@ export default function FormPage() {
       };
 
       await addDoc(collection(db, 'hasil_diagnosa'), dataToSave);
-      toast({ title: 'Berhasil', description: 'Hasil skrining telah disimpan', status: 'success', duration: 3000 });
+      toast({ title: 'Berhasil', description: 'Hasil kuesioner telah disimpan', status: 'success', duration: 3000 });
     } catch (error) {
       console.error('Error saving results:', error);
     }
@@ -1027,20 +1319,28 @@ export default function FormPage() {
 
   const handleNext = () => {
     if (currentStep === 0) {
-      // Validasi data diri
-      if (!formData.nama.trim() || !formData.usia || !formData.jenisKelamin) {
-        toast({ title: 'Data tidak lengkap', description: 'Harap lengkapi data diri terlebih dahulu', status: 'warning', duration: 3000 });
+      // Validasi pilih penyakit
+      if (!selectedPenyakit) {
+        toast({ title: 'Pilih jenis pemeriksaan', description: 'Harap pilih jenis pemeriksaan terlebih dahulu', status: 'warning', duration: 3000 });
         return;
       }
       setCurrentStep(1);
+    } else if (currentStep === 1) {
+      // Validasi data diri
+      if (!validateForm()) {
+        return;
+      }
+      // Fetch pertanyaan setelah data diri selesai
+      fetchPertanyaan();
+      setCurrentStep(2);
     } else {
       // Validasi pertanyaan untuk penyakit saat ini
       if (!validateForm()) {
         return;
       }
       
-      // Pindah ke penyakit berikutnya
-      if (currentStep < diseaseSteps.length) {
+      // Pindah ke pertanyaan berikutnya
+      if (currentStep < diseaseSteps.length + 1) {
         setCurrentStep(currentStep + 1);
       } else {
         // Semua pertanyaan selesai, submit form
@@ -1066,12 +1366,14 @@ export default function FormPage() {
   // Progress calculation
   useEffect(() => {
     if (currentStep === 0) {
-      setProgress(10);
+      setProgress(0);
+    } else if (currentStep === 1) {
+      setProgress(33);
     } else {
       const totalQuestions = pertanyaan.length;
       const answeredQuestions = Object.keys(jawaban).length;
-      const baseProgress = 10;
-      const questionProgress = (answeredQuestions / totalQuestions) * 80;
+      const baseProgress = 33;
+      const questionProgress = (answeredQuestions / totalQuestions) * 67;
       setProgress(baseProgress + questionProgress);
     }
   }, [currentStep, jawaban, pertanyaan.length]);
@@ -1086,7 +1388,7 @@ export default function FormPage() {
         <Box mb={6} p={4} bg="purple.50" borderRadius="lg">
           <HStack justify="space-between" align="center">
             <Badge colorScheme="purple" fontSize="lg" px={3} py={1}>
-              Indikasi {currentPage} dari {totalPages}
+              Hasil {currentPage} dari {totalPages}
             </Badge>
             <HStack spacing={3}>
               <Button
@@ -1115,21 +1417,21 @@ export default function FormPage() {
         <Box 
           p={6} 
           bg={
-            disease.name === "Tidak Terdeteksi Penyakit Serius" ? "green.50" :
+            disease.name === "Tidak Terdeteksi Masalah Serius" ? "green.50" :
             disease.riskCategory === "Tinggi" ? "red.50" : 
             disease.riskCategory === "Sedang" ? "orange.50" : "yellow.50"
           } 
           borderRadius="lg"
           borderLeft="4px"
           borderColor={
-            disease.name === "Tidak Terdeteksi Penyakit Serius" ? "green.400" :
+            disease.name === "Tidak Terdeteksi Masalah Serius" ? "green.400" :
             disease.riskCategory === "Tinggi" ? "red.400" : 
             disease.riskCategory === "Sedang" ? "orange.400" : "yellow.400"
           }
         >
           <VStack align="start" spacing={4}>
             <Heading size="xl" color={
-              disease.name === "Tidak Terdeteksi Penyakit Serius" ? "green.600" :
+              disease.name === "Tidak Terdeteksi Masalah Serius" ? "green.600" :
               disease.riskCategory === "Tinggi" ? "red.600" : 
               disease.riskCategory === "Sedang" ? "orange.600" : "yellow.600"
             }>
@@ -1140,7 +1442,7 @@ export default function FormPage() {
             <Box w="full" p={4} bg="white" borderRadius="md" boxShadow="sm">
               <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4}>
                 <VStack>
-                  <Text fontSize="sm" color="gray.600">Total Skor</Text>
+                  <Text fontSize="sm" color="gray.600">Skor Rata-rata</Text>
                   <Text fontSize="2xl" fontWeight="bold" color="blue.600">
                     {disease.totalScore}/{disease.maxScore}
                   </Text>
@@ -1152,7 +1454,7 @@ export default function FormPage() {
                   </Text>
                 </VStack>
                 <VStack>
-                  <Text fontSize="sm" color="gray.600">Kategori Risiko</Text>
+                  <Text fontSize="sm" color="gray.600">Tingkat Persetujuan</Text>
                   <Badge 
                     fontSize="md" 
                     px={3} 
@@ -1170,9 +1472,9 @@ export default function FormPage() {
 
             <Text fontSize="lg" color="gray.700">
               <strong>
-                {disease.name === "Tidak Terdeteksi Penyakit Serius" 
-                  ? "Tidak terdeteksi indikasi penyakit serius." 
-                  : `Terdeteksi indikasi ${disease.name.toLowerCase()} dengan tingkat risiko ${disease.riskCategory.toLowerCase()}.`}
+                {disease.name === "Tidak Terdeteksi Masalah Serius" 
+                  ? "Tidak terdeteksi indikasi masalah kesehatan serius." 
+                  : `Terdeteksi indikasi ${disease.name.toLowerCase()} dengan tingkat persetujuan ${disease.riskCategory.toLowerCase()}.`}
               </strong>
             </Text>
 
@@ -1207,13 +1509,34 @@ export default function FormPage() {
     );
   };
 
-  // Render pertanyaan berdasarkan step
+  // Render step berdasarkan currentStep
   const renderCurrentStep = () => {
-    // Step 0: Data Diri
+    // Step 0: Pilih Penyakit
     if (currentStep === 0) {
+      return <DiseaseSelectionPage />;
+    }
+
+    // Step 1: Data Diri
+    if (currentStep === 1) {
       return (
         <Box w="100%">
-          <Heading size="md" color="purple.700" mb={4}>Data Diri</Heading>
+          <Box mb={6} p={4} bg="blue.50" borderRadius="lg">
+            <HStack justify="space-between" align="center">
+              <Box>
+                <Badge colorScheme="blue" fontSize="md" mb={2}>
+                  Pemeriksaan: {selectedPenyakit?.name}
+                </Badge>
+                <Text fontSize="sm" color="gray.600">
+                  Silahkan lengkapi data diri Anda terlebih dahulu
+                </Text>
+              </Box>
+              <Badge colorScheme="purple" fontSize="md">
+                Step {currentStep} dari {diseaseSteps.length + 1}
+              </Badge>
+            </HStack>
+          </Box>
+
+          <Heading size="md" color="purple.700" mb={4}>Data Diri Responden</Heading>
           <FormControl isRequired mb={4}>
             <FormLabel fontSize="lg" fontWeight="medium">Nama Lengkap</FormLabel>
             <Input 
@@ -1246,14 +1569,14 @@ export default function FormPage() {
       );
     }
 
-    // Step 1+: Pertanyaan berdasarkan penyakit (SEMUA PERTANYAAN DALAM SATU HALAMAN)
-    const currentDisease = diseaseSteps[currentStep - 1];
+    // Step 2+: Pertanyaan berdasarkan penyakit dengan format tabel
+    const currentDisease = diseaseSteps[currentStep - 2];
     const questionsForDisease = groupedQuestions[currentDisease] || [];
 
     if (questionsForDisease.length === 0) {
       return (
         <Box textAlign="center" py={8}>
-          <Text color="gray.500">Tidak ada pertanyaan yang tersedia.</Text>
+          <Text color="gray.500">Tidak ada pernyataan yang tersedia.</Text>
         </Box>
       );
     }
@@ -1290,27 +1613,27 @@ export default function FormPage() {
         <Container maxW="container.md" py={10}>
           <VStack spacing={8} align="stretch">
             <Button variant="outline" colorScheme="purple" leftIcon={<ChevronLeftIcon />} onClick={handleBack} alignSelf="flex-start">
-              Kembali ke Form
+              Kembali ke Kuesioner
             </Button>
 
             <Box textAlign="center">
-              <Heading as="h1" size="2xl" mb={3} color="purple.800">Hasil Skrining Kesehatan</Heading>
-              <Text color="gray.600">Berdasarkan jawaban yang Anda berikan</Text>
+              <Heading as="h1" size="2xl" mb={3} color="purple.800">Hasil Kuesioner Kesehatan</Heading>
+              <Text color="gray.600">Berdasarkan penilaian yang Anda berikan</Text>
             </Box>
 
             <Card borderRadius="xl" boxShadow="lg">
               <CardHeader bg="purple.50" borderTopRadius="xl">
-                <Heading size="md" color="purple.700">Hasil Skrining Kesehatan</Heading>
+                <Heading size="md" color="purple.700">Hasil Analisis Kuesioner</Heading>
               </CardHeader>
               <CardBody>
                 <VStack spacing={6} align="stretch">
                   <Box p={4} bg="blue.50" borderRadius="md">
-                    <Heading size="md" color="blue.700" mb={3}>Informasi Medis</Heading>
+                    <Heading size="md" color="blue.700" mb={3}>Informasi Responden</Heading>
                     <VStack align="start" spacing={2}>
                       <Text><strong>Nama:</strong> {formData.nama}</Text>
                       <Text><strong>Usia:</strong> {formData.usia} tahun</Text>
                       <Text><strong>Jenis Kelamin:</strong> {formData.jenisKelamin}</Text>
-                      <Text><strong>Tanggal Pemeriksaan:</strong> {new Date().toLocaleDateString('id-ID')}</Text>
+                      <Text><strong>Tanggal Pengisian:</strong> {new Date().toLocaleDateString('id-ID')}</Text>
                       <Text><strong>Total Skor:</strong> {results.totalSkor}/{results.maxSkor} ({results.persentase}%)</Text>
                     </VStack>
                   </Box>
@@ -1329,12 +1652,12 @@ export default function FormPage() {
             {/* TOMBOL DOWNLOAD */}
             <Card borderRadius="xl" boxShadow="lg">
               <CardHeader bg="green.50" borderTopRadius="xl">
-                <Heading size="md" color="green.700">Download Hasil Skrining</Heading>
+                <Heading size="md" color="green.700">Download Hasil Kuesioner</Heading>
               </CardHeader>
               <CardBody>
                 <VStack spacing={4} align="stretch">
                   <Text color="gray.600">
-                    Unduh hasil skrining Anda untuk konsultasi dengan tenaga kesehatan.
+                    Unduh hasil kuesioner Anda untuk konsultasi dengan tenaga kesehatan.
                   </Text>
                   
                   <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
@@ -1380,7 +1703,9 @@ export default function FormPage() {
           <Box>
             <HStack justify="space-between" mb={2}>
               <Text fontSize="sm" color="gray.600">
-                {currentStep === 0 ? 'Data Diri' : `Step ${currentStep} dari ${diseaseSteps.length}`}
+                {currentStep === 0 ? 'Pilih Jenis Pemeriksaan' : 
+                 currentStep === 1 ? 'Data Diri' : 
+                 `Pertanyaan ${currentStep - 1} dari ${diseaseSteps.length}`}
               </Text>
               <Text fontSize="sm" color="gray.600">{Math.round(progress)}%</Text>
             </HStack>
@@ -1391,14 +1716,19 @@ export default function FormPage() {
             Kembali
           </Button>
 
+          {/* JUDUL TUNGGAL - TIDAK ADA DUPLIKASI */}
           <Box textAlign="center">
             <Heading as="h1" size="2xl" mb={3} color="purple.800">
-              {currentStep === 0 ? 'Data Diri' : 'Pertanyaan Kesehatan'}
+              {currentStep === 0 ? 'Pilih Jenis Pemeriksaan' : 
+               currentStep === 1 ? 'Data Diri Responden' : 
+               'Borang Kaji Selidik Kesehatan'}
             </Heading>
             <Text color="gray.600">
               {currentStep === 0 
-                ? 'Lengkapi data diri Anda terlebih dahulu' 
-                : 'Jawab semua pertanyaan dengan jujur sesuai kondisi kesehatan Anda'}
+                ? 'Silahkan pilih jenis pemeriksaan sesuai dengan keluhan yang anda rasakan' 
+                : currentStep === 1
+                ? 'Lengkapi data diri Anda terlebih dahulu'
+                : 'Berikan penilaian untuk setiap pernyataan dengan skala 1-10'}
             </Text>
           </Box>
 
@@ -1412,11 +1742,13 @@ export default function FormPage() {
                   <Alert status="info" borderRadius="md">
                     <AlertIcon />
                     <Box>
-                      <Text fontWeight="bold" mb={1}>Informasi Penting</Text>
+                      <Text fontWeight="bold" mb={1}>Petunjuk Pengisian</Text>
                       <Text fontSize="sm">
                         {currentStep === 0 
-                          ? 'Data yang Anda berikan akan dijaga kerahasiaannya dan digunakan hanya untuk tujuan skrining kesehatan.'
-                          : 'Jawablah semua pertanyaan dengan jujur sesuai kondisi kesehatan Anda saat ini.'}
+                          ? 'Pilih salah satu jenis pemeriksaan untuk melanjutkan ke tahap berikutnya.'
+                          : currentStep === 1
+                          ? 'Data yang Anda berikan akan dijaga kerahasiaannya dan digunakan hanya untuk tujuan assessment kesehatan.'
+                          : 'Gunakan skala 1-10 untuk menilai setiap pernyataan: 1 = Sangat Tidak Setuju, 10 = Sangat Sangat Setuju'}
                       </Text>
                     </Box>
                   </Alert>
@@ -1431,10 +1763,12 @@ export default function FormPage() {
                       rightIcon={currentStep > 0 ? <ChevronRightIcon /> : undefined}
                     >
                       {currentStep === 0 
-                        ? 'Mulai Skrining' 
-                        : currentStep === diseaseSteps.length
+                        ? 'Lanjutkan ke Data Diri' 
+                        : currentStep === 1
+                        ? 'Mulai Kuesioner'
+                        : currentStep === diseaseSteps.length + 1
                         ? 'Lihat Hasil'
-                        : 'Pertanyaan Selanjutnya'}
+                        : 'Lanjutkan'}
                     </Button>
                   </HStack>
                 </VStack>

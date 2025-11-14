@@ -7,6 +7,6 @@
       "@/lib/*": ["./src/lib/*"]
     }
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "Scripts/addQuestions.js"],
   "exclude": ["node_modules", ".next"]
 }

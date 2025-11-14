@@ -21,9 +21,13 @@ import {
   Container,
   useColorModeValue,
   Icon,
+  Card,
+  CardBody,
+  HStack,
+  Badge,
 } from "@chakra-ui/react";
 import { useRouter } from 'next/navigation';
-import { FiHeart, FiVideo, FiFileText, FiUsers } from 'react-icons/fi';
+import { FiHeart, FiVideo, FiFileText, FiUsers, FiArrowRight } from 'react-icons/fi';
 
 // SVG Icon untuk Chevron Down
 const ChevronDownIcon = (props) => (
@@ -68,17 +72,103 @@ const features = [
   },
 ];
 
+// Data penyakit berdasarkan statistik yang Anda berikan - 8 JENIS
+const penyakitList = [
+  {
+    id: 1,
+    name: 'Sistem Pernapasan',
+    description: 'Pemeriksaan kesehatan paru-paru dan saluran pernapasan',
+    color: 'blue',
+    pertanyaan: 10,
+    icon: '🫁',
+    urutan: 1
+  },
+  {
+    id: 2,
+    name: 'Sistem Kardiovaskuler',
+    description: 'Pemeriksaan kesehatan jantung dan pembuluh darah',
+    color: 'red',
+    pertanyaan: 10,
+    icon: '❤️',
+    urutan: 2
+  },
+  {
+    id: 3,
+    name: 'Sistem Pencernaan',
+    description: 'Pemeriksaan kesehatan lambung, usus, dan organ pencernaan',
+    color: 'orange',
+    pertanyaan: 10,
+    icon: '🍎',
+    urutan: 3
+  },
+  {
+    id: 4,
+    name: 'Istirahat Tidur',
+    description: 'Pemeriksaan kualitas tidur dan pola istirahat',
+    color: 'purple',
+    pertanyaan: 10,
+    icon: '😴',
+    urutan: 4
+  },
+  {
+    id: 5,
+    name: 'Sistem Perkemihan',
+    description: 'Pemeriksaan kesehatan ginjal dan saluran kemih',
+    color: 'green',
+    pertanyaan: 10,
+    icon: '💧',
+    urutan: 5
+  },
+  {
+    id: 6,
+    name: 'Gangguan Nutrisi',
+    description: 'Pemeriksaan status gizi dan pola makan',
+    color: 'teal',
+    pertanyaan: 10,
+    icon: '⚖️',
+    urutan: 6
+  },
+  {
+    id: 7,
+    name: 'Sistem Saraf',
+    description: 'Pemeriksaan kesehatan otak dan sistem saraf',
+    color: 'pink',
+    pertanyaan: 10,
+    icon: '🧠',
+    urutan: 7
+  },
+  {
+    id: 8,
+    name: 'Endokrin',
+    description: 'Pemeriksaan kesehatan hormon dan kelenjar',
+    color: 'yellow',
+    pertanyaan: 10,
+    icon: '⚕️',
+    urutan: 8
+  }
+];
+
 export default function Home() {
   const router = useRouter();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [isClient, setIsClient] = useState(false);
+  const [showPenyakitSelection, setShowPenyakitSelection] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
   }, []);
 
   const handleGetStarted = () => {
-    router.push('/form');
+    setShowPenyakitSelection(true);
+  };
+
+  const handlePilihPenyakit = (penyakitId) => {
+    // Navigasi ke form page dengan parameter penyakit yang dipilih
+    router.push(`/form?penyakit=${penyakitId}`);
+  };
+
+  const handleBackToHome = () => {
+    setShowPenyakitSelection(false);
   };
 
   const bgGradient = useColorModeValue(
@@ -119,6 +209,98 @@ export default function Home() {
     );
   }
 
+  // TAMPILAN PEMILIHAN PENYAKIT
+  if (showPenyakitSelection) {
+    return (
+      <Box bg="white" minH="100vh" w="100vw" overflowX="hidden">
+        <Container maxW="1200px" py={10}>
+          <VStack spacing={8}>
+            {/* Header */}
+            <Box textAlign="center">
+              <Button 
+                variant="outline" 
+                colorScheme="purple" 
+                mb={6}
+                onClick={handleBackToHome}
+                leftIcon={<ChevronDownIcon style={{ transform: 'rotate(90deg)' }} />}
+              >
+                Kembali
+              </Button>
+              <Heading as="h1" size="2xl" mb={3} color="purple.800">
+                Pilih Jenis Pemeriksaan
+              </Heading>
+              <Text color="gray.600" fontSize="lg">
+                Silahkan pilih dengan keluhan yang anda rasakan
+              </Text>
+            </Box>
+
+            {/* Grid Penyakit - 2x4 Layout */}
+            <SimpleGrid columns={{ base: 1, md: 2, lg: 2 }} spacing={6} w="100%">
+              {penyakitList.map((penyakit) => (
+                <Card 
+                  key={penyakit.id}
+                  borderRadius="xl"
+                  boxShadow="lg"
+                  border="1px"
+                  borderColor="gray.100"
+                  transition="all 0.3s"
+                  _hover={{
+                    transform: "translateY(-4px)",
+                    boxShadow: "2xl",
+                  }}
+                  cursor="pointer"
+                  onClick={() => handlePilihPenyakit(penyakit.id)}
+                >
+                  <CardBody p={6}>
+                    <VStack spacing={4} align="start">
+                      <HStack justify="space-between" w="100%">
+                        <Box>
+                          <Text fontSize="3xl" mb={2}>{penyakit.icon}</Text>
+                          <Heading as="h3" size="lg" color="gray.800">
+                            {penyakit.name}
+                          </Heading>
+                        </Box>
+                        <Badge colorScheme={penyakit.color} fontSize="md" px={3} py={1}>
+                          Urutan {penyakit.urutan}
+                        </Badge>
+                      </HStack>
+                      
+                      <Text color="gray.600" lineHeight="1.6">
+                        {penyakit.description}
+                      </Text>
+                      
+                      <HStack w="100%" justify="space-between">
+                        <Badge colorScheme="blue" variant="outline">
+                          {penyakit.pertanyaan} pertanyaan
+                        </Badge>
+                        <Button
+                          rightIcon={<FiArrowRight />}
+                          colorScheme={penyakit.color}
+                          variant="outline"
+                          size="sm"
+                        >
+                          Mulai Pemeriksaan
+                        </Button>
+                      </HStack>
+                    </VStack>
+                  </CardBody>
+                </Card>
+              ))}
+            </SimpleGrid>
+
+            {/* Info Tambahan */}
+            <Box textAlign="center" mt={8}>
+              <Text color="gray.500" fontSize="sm">
+                Pilih salah satu sistem tubuh di atas untuk memulai pemeriksaan kesehatan Anda
+              </Text>
+            </Box>
+          </VStack>
+        </Container>
+      </Box>
+    );
+  }
+
+  // TAMPILAN HOME BIASA
   return (
     <Box bg="white" minH="100vh" w="100vw" overflowX="hidden">
       {/* Hero Section */}
@@ -186,7 +368,7 @@ export default function Home() {
         <Flex
           direction="column"
           align="center"
-          justify="flex-start" // DIUBAH: dari center ke flex-start
+          justify="flex-start"
           minH="100vh"
           w="100%"
           maxW="1400px"
@@ -194,7 +376,7 @@ export default function Home() {
           px={{ base: 6, md: 8, lg: 10 }}
           position="relative"
           zIndex={2}
-          pt={{ base: "120px", md: "140px", lg: "160px" }} // DITAMBAHKAN: padding top untuk naik ke atas
+          pt={{ base: "120px", md: "140px", lg: "160px" }}
         >
           <Box 
             zIndex={2}
@@ -230,7 +412,7 @@ export default function Home() {
               mx="auto"
               maxW="500px"
             >
-              Platform kesehatan terpercaya untuk memantau kondisi kesehatan Anda dengan mudah dan akurat
+              Skrining ini untuk mendeteksi gejala masalah kesehatan yang anda rasakan
             </Text>
             
             <Button
