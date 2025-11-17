@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import {
   Box,
   Container,
@@ -202,30 +202,216 @@ const penyakitList = [
   }
 ];
 
-// Komponen untuk Rating Scale 1-10 dengan format tabel seperti borang
-const RatingScaleTable = ({ value, onChange, question, questionNumber }) => {
-  const numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+// Fungsi untuk mendapatkan keterangan rating berdasarkan jenis pertanyaan
+const getRatingLabels = (questionText, questionType = 'default') => {
+  const lowerQuestion = questionText.toLowerCase();
   
-  const getRatingLabel = (number) => {
-    if (number === 1) return 'Sangat Tidak Setuju';
-    if (number === 2) return 'Tidak Setuju';
-    if (number === 3) return 'Kurang Setuju';
-    if (number === 4) return 'Sedikit Tidak Setuju';
-    if (number === 5) return 'Netral';
-    if (number === 6) return 'Sedikit Setuju';
-    if (number === 7) return 'Cukup Setuju';
-    if (number === 8) return 'Setuju';
-    if (number === 9) return 'Sangat Setuju';
-    if (number === 10) return 'Sangat Sangat Setuju';
-    return '';
-  };
+  // SKALA FREKUENSI (0-10)
+  if (lowerQuestion.includes('frekuensi') || 
+      lowerQuestion.includes('sering') || 
+      lowerQuestion.includes('berapa kali') ||
+      lowerQuestion.includes('seberapa sering') ||
+      lowerQuestion.includes('kekerapan')) {
+    return {
+      0: 'Tidak Pernah',
+      1: 'Beberapa Kali Setahun',
+      2: 'Sekali Sebulan',
+      3: 'Beberapa Kali Sebulan',
+      4: 'Sekali Seminggu',
+      5: 'Beberapa Kali Seminggu',
+      6: 'Sekali Sehari',
+      7: 'Beberapa Kali Sehari',
+      8: 'Setiap Beberapa Jam',
+      9: 'Hampir Terus Menerus',
+      10: 'Terus Menerus'
+    };
+  }
 
+  // SKALA NYERI/SAKIT (0-10)
+  if (lowerQuestion.includes('nyeri') || 
+      lowerQuestion.includes('sakit') || 
+      lowerQuestion.includes('rasa tidak nyaman') ||
+      lowerQuestion.includes('ketidaknyamanan')) {
+    return {
+      0: 'Tidak Nyeri',
+      1: 'Sangat Ringan',
+      2: 'Ringan',
+      3: 'Agak Ringan',
+      4: 'Sedang Ringan',
+      5: 'Sedang',
+      6: 'Agak Berat',
+      7: 'Berat',
+      8: 'Sangat Berat',
+      9: 'Sangat Sangat Berat',
+      10: 'Nyeri Tak Tertahankan'
+    };
+  }
+
+  // SKALA SESAK NAPAS
+  if (lowerQuestion.includes('sesak') || 
+      lowerQuestion.includes('napas') || 
+      lowerQuestion.includes('pernapasan') ||
+      lowerQuestion.includes('bernapas')) {
+    return {
+      0: 'Tidak Sesak',
+      1: 'Sangat Ringan (hanya saat aktivitas berat)',
+      2: 'Ringan (saat naik tangga 2 lantai)',
+      3: 'Agak Ringan (saat berjalan cepat)',
+      4: 'Sedang (saat berjalan biasa)',
+      5: 'Agak Berat (saat berjalan perlahan)',
+      6: 'Berat (saat berbicara)',
+      7: 'Sangat Berat (saat istirahat ringan)',
+      8: 'Parah (butuh bantuan oksigen)',
+      9: 'Sangat Parah (kesulitan bernapas)',
+      10: 'Kritis (gagal napas)'
+    };
+  }
+
+  // SKALA BATUK
+  if (lowerQuestion.includes('batuk')) {
+    return {
+      0: 'Tidak Batuk',
+      1: 'Sangat Jarang (1-2x/minggu)',
+      2: 'Jarang (3-4x/minggu)',
+      3: 'Kadang-kadang (1x/hari)',
+      4: 'Sering (2-3x/hari)',
+      5: 'Cukup Sering (4-6x/hari)',
+      6: 'Sering Sekali (setiap beberapa jam)',
+      7: 'Hampir Terus Menerus',
+      8: 'Batuk Berat mengganggu tidur',
+      9: 'Batuk Sangat Berat',
+      10: 'Batuk Tak Terkontrol'
+    };
+  }
+
+  // SKALA JANTUNG/DADA
+  if (lowerQuestion.includes('jantung') || 
+      lowerQuestion.includes('dada') || 
+      lowerQuestion.includes('palpitasi') ||
+      lowerQuestion.includes('berdebar')) {
+    return {
+      0: 'Tidak Ada Keluhan',
+      1: 'Sangat Ringan (jarang sekali)',
+      2: 'Ringan (beberapa kali setahun)',
+      3: 'Agak Ringan (sekali sebulan)',
+      4: 'Sedang (beberapa kali sebulan)',
+      5: 'Cukup Mengganggu (sekali seminggu)',
+      6: 'Mengganggu (beberapa kali seminggu)',
+      7: 'Sangat Mengganggu (setiap hari)',
+      8: 'Berat (mengganggu aktivitas)',
+      9: 'Sangat Berat (mengganggu tidur)',
+      10: 'Kritis (butuh penanganan darurat)'
+    };
+  }
+
+  // SKALA PENCERNAAN
+  if (lowerQuestion.includes('perut') || 
+      lowerQuestion.includes('lambung') || 
+      lowerQuestion.includes('mual') ||
+      lowerQuestion.includes('muntah') ||
+      lowerQuestion.includes('diare') ||
+      lowerQuestion.includes('sembelit')) {
+    return {
+      0: 'Tidak Ada Keluhan',
+      1: 'Sangat Ringan (hampir tidak terasa)',
+      2: 'Ringan (tidak mengganggu)',
+      3: 'Agak Ringan (sedikit mengganggu)',
+      4: 'Sedang (mengganggu ringan)',
+      5: 'Cukup Mengganggu (perlu istirahat)',
+      6: 'Mengganggu (mengurangi aktivitas)',
+      7: 'Sangat Mengganggu (aktivitas terbatas)',
+      8: 'Berat (butuh pengobatan)',
+      9: 'Sangat Berat (butuh perhatian medis)',
+      10: 'Kritis (butuh penanganan darurat)'
+    };
+  }
+
+  // SKALA TIDUR
+  if (lowerQuestion.includes('tidur') || 
+      lowerQuestion.includes('insomnia') || 
+      lowerQuestion.includes('kantuk') ||
+      lowerQuestion.includes('mengantuk')) {
+    return {
+      0: 'Tidur Sangat Nyenyak',
+      1: 'Tidur Nyenyak',
+      2: 'Tidur Cukup Baik',
+      3: 'Tidur Agak Terganggu',
+      4: 'Tidur Terganggu Ringan',
+      5: 'Tidur Sedang Terganggu',
+      6: 'Sulit Tidur Beberapa Kali',
+      7: 'Sulit Tidur Setiap Malam',
+      8: 'Hampir Tidak Tidur',
+      9: 'Tidur Sangat Buruk',
+      10: 'Tidak Tidur Sama Sekali'
+    };
+  }
+
+  // SKALA KEUANGAN/STRES
+  if (lowerQuestion.includes('stres') || 
+      lowerQuestion.includes('cemas') || 
+      lowerQuestion.includes('khawatir') ||
+      lowerQuestion.includes('tekanan')) {
+    return {
+      0: 'Sangat Tenang',
+      1: 'Tenang',
+      2: 'Sedikit Tenang',
+      3: 'Netral',
+      4: 'Sedikit Cemas',
+      5: 'Cemas Ringan',
+      6: 'Cukup Cemas',
+      7: 'Cemas',
+      8: 'Sangat Cemas',
+      9: 'Sangat Sangat Cemas',
+      10: 'Panik/Stres Berat'
+    };
+  }
+
+  // SKALA KUALITAS HIDUP
+  if (lowerQuestion.includes('puas') || 
+      lowerQuestion.includes('kualitas hidup') || 
+      lowerQuestion.includes('kebahagiaan')) {
+    return {
+      0: 'Sangat Tidak Puas',
+      1: 'Tidak Puas',
+      2: 'Cukup Tidak Puas',
+      3: 'Sedikit Tidak Puas',
+      4: 'Netral',
+      5: 'Sedikit Puas',
+      6: 'Cukup Puas',
+      7: 'Puas',
+      8: 'Sangat Puas',
+      9: 'Sangat Sangat Puas',
+      10: 'Sempurna'
+    };
+  }
+
+  // SKALA UMUM (default)
+  return {
+    0: 'Tidak Ada/Sangat Rendah',
+    1: 'Sangat Rendah',
+    2: 'Rendah',
+    3: 'Agak Rendah',
+    4: 'Sedang Rendah',
+    5: 'Sedang',
+    6: 'Sedang Tinggi',
+    7: 'Tinggi',
+    8: 'Sangat Tinggi',
+    9: 'Sangat Sangat Tinggi',
+    10: 'Maksimal/Parah'
+  };
+};
+
+// Komponen untuk Rating Scale 0-10 dengan keterangan menyesuaikan pertanyaan
+const RatingScaleTable = ({ value, onChange, question, questionNumber }) => {
+  const numbers = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  const ratingLabels = getRatingLabels(question);
+  
   const getColorScheme = (number) => {
-    if (number <= 3) return 'red';
-    if (number <= 5) return 'orange';
-    if (number <= 7) return 'yellow';
-    if (number <= 9) return 'blue';
-    return 'green';
+    if (number <= 2) return 'green';
+    if (number <= 4) return 'blue';
+    if (number <= 6) return 'yellow';
+    if (number <= 8) return 'orange';
+    return 'red';
   };
 
   return (
@@ -233,12 +419,12 @@ const RatingScaleTable = ({ value, onChange, question, questionNumber }) => {
       <Table variant="simple" size="sm" bg="white" borderRadius="md" overflow="hidden">
         <Thead bg="gray.50">
           <Tr>
-            <Th fontSize="xs" color="gray.600" borderRight="1px" borderColor="gray.200">
+            <Th fontSize="xs" color="gray.600" borderRight="1px" borderColor="gray.200" width="40%">
               <Badge colorScheme="blue" mr={2}>{questionNumber}</Badge>
               {question}
             </Th>
             {numbers.map(number => (
-              <Th key={number} fontSize="xs" color="gray.600" textAlign="center" fontWeight="normal" px={2}>
+              <Th key={number} fontSize="xs" color="gray.600" textAlign="center" fontWeight="normal" px={1}>
                 {number}
               </Th>
             ))}
@@ -252,26 +438,49 @@ const RatingScaleTable = ({ value, onChange, question, questionNumber }) => {
               fontSize="xs" 
               color="gray.600"
               whiteSpace="normal"
+              bg="gray.25"
             >
-              <Text fontWeight="medium">Tingkat Persetujuan</Text>
-              <Text fontSize="xs">1 = Sangat Tidak Setuju, 10 = Sangat Sangat Setuju</Text>
+              <Text fontWeight="medium">Tingkat Skala</Text>
+              <Text fontSize="xs">0 = Terendah, 10 = Tertinggi</Text>
             </Td>
             {numbers.map(number => (
-              <Td key={number} textAlign="center" px={2} py={3}>
+              <Td key={number} textAlign="center" px={1} py={2}>
                 <Button
-                  size="sm"
+                  size="xs"
                   colorScheme={getColorScheme(number)}
                   variant={value === number.toString() ? 'solid' : 'outline'}
                   onClick={() => onChange(number.toString())}
-                  borderRadius="full"
-                  height="30px"
-                  width="30px"
-                  minWidth="30px"
+                  borderRadius="md"
+                  height="28px"
+                  width="28px"
+                  minWidth="28px"
                   p={0}
-                  _hover={{ transform: 'scale(1.1)' }}
+                  fontSize="xs"
+                  fontWeight="bold"
+                  _hover={{ transform: 'scale(1.05)' }}
                 >
-                  <Text fontSize="xs" fontWeight="bold">{number}</Text>
+                  {number}
                 </Button>
+              </Td>
+            ))}
+          </Tr>
+          {/* Baris untuk keterangan */}
+          <Tr>
+            <Td 
+              borderRight="1px" 
+              borderColor="gray.200" 
+              fontSize="xs" 
+              color="gray.600"
+              whiteSpace="normal"
+              bg="gray.25"
+            >
+              <Text fontWeight="medium">Keterangan</Text>
+            </Td>
+            {numbers.map(number => (
+              <Td key={number} textAlign="center" px={1} py={1}>
+                <Text fontSize="2xs" color="gray.500" noOfLines={2}>
+                  {ratingLabels[number]}
+                </Text>
               </Td>
             ))}
           </Tr>
@@ -280,13 +489,13 @@ const RatingScaleTable = ({ value, onChange, question, questionNumber }) => {
       
       {/* Legend untuk skala */}
       <Box mt={3} p={3} bg="gray.50" borderRadius="md">
-        <SimpleGrid columns={5} spacing={2} fontSize="xs">
-          <Text textAlign="center"><strong>1:</strong> Sangat Tidak Setuju</Text>
-          <Text textAlign="center"><strong>3:</strong> Kurang Setuju</Text>
-          <Text textAlign="center"><strong>5:</strong> Netral</Text>
-          <Text textAlign="center"><strong>7:</strong> Cukup Setuju</Text>
-          <Text textAlign="center"><strong>10:</strong> Sangat Sangat Setuju</Text>
-        </SimpleGrid>
+        <VStack spacing={1} align="start" fontSize="xs">
+          <Text><strong>Keterangan Skala 0-10:</strong></Text>
+          <Text>0: {ratingLabels[0]} | 5: {ratingLabels[5]} | 10: {ratingLabels[10]}</Text>
+          <Text color="gray.500">
+            Pilih angka yang paling sesuai dengan kondisi Anda
+          </Text>
+        </VStack>
       </Box>
     </Box>
   );
@@ -440,7 +649,8 @@ const VideoPlayerModal = ({ isOpen, onClose, video }) => {
   );
 };
 
-export default function FormPage() {
+// Komponen utama yang menggunakan useSearchParams
+function FormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const selectedPenyakitId = searchParams.get('penyakit');
@@ -736,10 +946,10 @@ export default function FormPage() {
           <HStack justify="space-between" align="center">
             <Box>
               <Badge colorScheme="blue" fontSize="md" mb={2}>
-                Borang Kaji Selidik: {diseaseName}
+                Form Skrining Kesehatan: {diseaseName}
               </Badge>
               <Text fontSize="sm" color="gray.600">
-                {sortedQuestions.length} pernyataan untuk dinilai (Skala 1-10)
+                {sortedQuestions.length} pernyataan untuk dinilai (Skala 0-10)
               </Text>
             </Box>
             <Badge colorScheme="purple" fontSize="md">
@@ -768,14 +978,6 @@ export default function FormPage() {
   const DiseaseSelectionPage = () => {
     return (
       <Box w="100%">
-        {/* JUDUL TUNGGAL - TIDAK ADA DUPLIKASI */}
-        <Box textAlign="center" mb={8}>
-          <Heading as="h1" size="2xl" mb={3} color="purple.800">
-          </Heading>
-          <Text color="gray.600" fontSize="lg">
-          </Text>
-        </Box>
-
         <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6} w="100%">
           {penyakitList.map((penyakit) => (
             <Card 
@@ -875,7 +1077,7 @@ export default function FormPage() {
       content += `${index + 1}. ${disease.name.toUpperCase()}\n`;
       content += `   - Skor Rata-rata: ${disease.totalScore}/${disease.maxScore}\n`;
       content += `   - Persentase: ${disease.persentase}%\n`;
-      content += `   - Tingkat Persetujuan: ${disease.riskCategory}\n\n`;
+      content += `   - Tingkat: ${disease.riskCategory}\n\n`;
       
       if (disease.rekomendasi && disease.rekomendasi.length > 0) {
         content += `   REKOMENDASI:\n`;
@@ -887,7 +1089,7 @@ export default function FormPage() {
     });
     
     content += `SKALA PENILAIAN:\n`;
-    content += `1 = Sangat Tidak Setuju, 3 = Kurang Setuju, 5 = Netral, 7 = Cukup Setuju, 10 = Sangat Sangat Setuju\n\n`;
+    content += `Skala 0-10 dengan keterangan menyesuaikan jenis pertanyaan\n\n`;
     
     content += `DISCLAIMER:\n`;
     content += `=================\n`;
@@ -1038,7 +1240,7 @@ export default function FormPage() {
 
       const description = disease.name === "Tidak Terdeteksi Masalah Serius" 
         ? "Berdasarkan hasil kuesioner, tidak terdeteksi indikasi masalah kesehatan serius."
-        : `Terdeteksi indikasi ${disease.name.toLowerCase()} dengan tingkat persetujuan ${disease.riskCategory.toLowerCase()}.`;
+        : `Terdeteksi indikasi ${disease.name.toLowerCase()} dengan tingkat ${disease.riskCategory.toLowerCase()}.`;
       
       const splitDesc = doc.splitTextToSize(description, pageWidth - 2 * margin - 10);
       doc.text(splitDesc, margin + 5, yPosition);
@@ -1080,8 +1282,8 @@ export default function FormPage() {
     yPosition += 15;
 
     const scaleText = [
-      "1 = Sangat Tidak Setuju | 2 = Tidak Setuju | 3 = Kurang Setuju | 4 = Sedikit Tidak Setuju",
-      "5 = Netral | 6 = Sedikit Setuju | 7 = Cukup Setuju | 8 = Setuju | 9 = Sangat Setuju | 10 = Sangat Sangat Setuju"
+      "Skala 0-10 dengan keterangan menyesuaikan jenis pertanyaan",
+      "0 = Terendah/Tidak Ada, 5 = Sedang, 10 = Tertinggi/Parah"
     ];
 
     scaleText.forEach(text => {
@@ -1131,7 +1333,7 @@ export default function FormPage() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  // Handler untuk jawaban rating 1-10
+  // Handler untuk jawaban rating 0-10
   const handleRatingChange = (pertanyaanId, value) => {
     setJawaban(prev => ({ ...prev, [pertanyaanId]: value }));
   };
@@ -1170,7 +1372,7 @@ export default function FormPage() {
     return true;
   };
 
-  // Kalkulasi hasil berdasarkan jawaban rating 1-10
+  // Kalkulasi hasil berdasarkan jawaban rating 0-10
   const calculateResults = () => {
     const diseaseScores = {};
     const semuaRekomendasi = [];
@@ -1454,7 +1656,7 @@ export default function FormPage() {
                   </Text>
                 </VStack>
                 <VStack>
-                  <Text fontSize="sm" color="gray.600">Tingkat Persetujuan</Text>
+                  <Text fontSize="sm" color="gray.600">Tingkat</Text>
                   <Badge 
                     fontSize="md" 
                     px={3} 
@@ -1474,7 +1676,7 @@ export default function FormPage() {
               <strong>
                 {disease.name === "Tidak Terdeteksi Masalah Serius" 
                   ? "Tidak terdeteksi indikasi masalah kesehatan serius." 
-                  : `Terdeteksi indikasi ${disease.name.toLowerCase()} dengan tingkat persetujuan ${disease.riskCategory.toLowerCase()}.`}
+                  : `Terdeteksi indikasi ${disease.name.toLowerCase()} dengan tingkat ${disease.riskCategory.toLowerCase()}.`}
               </strong>
             </Text>
 
@@ -1716,19 +1918,19 @@ export default function FormPage() {
             Kembali
           </Button>
 
-          {/* JUDUL TUNGGAL - TIDAK ADA DUPLIKASI */}
+          {/* JUDUL TUNGGAL */}
           <Box textAlign="center">
             <Heading as="h1" size="2xl" mb={3} color="purple.800">
               {currentStep === 0 ? 'Pilih Jenis Pemeriksaan' : 
                currentStep === 1 ? 'Data Diri Responden' : 
-               'Borang Kaji Selidik Kesehatan'}
+               'Form Skrining Kesehatan'}
             </Heading>
             <Text color="gray.600">
               {currentStep === 0 
                 ? 'Silahkan pilih jenis pemeriksaan sesuai dengan keluhan yang anda rasakan' 
                 : currentStep === 1
                 ? 'Lengkapi data diri Anda terlebih dahulu'
-                : 'Berikan penilaian untuk setiap pernyataan dengan skala 1-10'}
+                : 'Berikan penilaian untuk setiap pernyataan dengan skala 0-10'}
             </Text>
           </Box>
 
@@ -1748,7 +1950,7 @@ export default function FormPage() {
                           ? 'Pilih salah satu jenis pemeriksaan untuk melanjutkan ke tahap berikutnya.'
                           : currentStep === 1
                           ? 'Data yang Anda berikan akan dijaga kerahasiaannya dan digunakan hanya untuk tujuan assessment kesehatan.'
-                          : 'Gunakan skala 1-10 untuk menilai setiap pernyataan: 1 = Sangat Tidak Setuju, 10 = Sangat Sangat Setuju'}
+                          : 'Gunakan skala 0-10 untuk menilai setiap pernyataan. Keterangan akan menyesuaikan jenis pertanyaan.'}
                       </Text>
                     </Box>
                   </Alert>
@@ -1778,5 +1980,23 @@ export default function FormPage() {
         </VStack>
       </Container>
     </Box>
+  );
+}
+
+// Komponen utama dengan Suspense boundary
+export default function FormPage() {
+  return (
+    <Suspense fallback={
+      <Box bg="white" minH="100vh">
+        <Container maxW="container.md" py={10}>
+          <VStack spacing={8}>
+            <Skeleton height="50px" width="300px" />
+            <Skeleton height="400px" width="100%" borderRadius="xl" />
+          </VStack>
+        </Container>
+      </Box>
+    }>
+      <FormContent />
+    </Suspense>
   );
 }

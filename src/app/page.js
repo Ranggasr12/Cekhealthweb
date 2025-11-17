@@ -392,7 +392,7 @@ export default function Home() {
               fontWeight="extrabold"
               lineHeight="1.1"
             >
-              Ayo Periksakan
+              Ayo Periksa
             </Heading>
             <Heading
               as="h2"
@@ -402,7 +402,7 @@ export default function Home() {
               fontWeight="extrabold"
               lineHeight="1.1"
             >
-              Tentang Keadaan Kesehatanmu
+              Kesehatan mu
             </Heading>
             <Text 
               color="gray.600" 
