@@ -202,109 +202,90 @@ const penyakitList = [
   }
 ];
 
-// Fungsi untuk mendapatkan keterangan rating berdasarkan jenis pertanyaan
-const getRatingLabels = (questionText, questionType = 'default') => {
+// Fungsi untuk mendapatkan keterangan rating berdasarkan jenis pertanyaan dengan RENTANG
+const getRatingLabels = (questionText) => {
   const lowerQuestion = questionText.toLowerCase();
   
-  // SKALA FREKUENSI (0-10)
-  if (lowerQuestion.includes('frekuensi') || 
-      lowerQuestion.includes('sering') || 
-      lowerQuestion.includes('berapa kali') ||
-      lowerQuestion.includes('seberapa sering') ||
-      lowerQuestion.includes('kekerapan')) {
-    return {
-      0: 'Tidak Pernah',
-      1: 'Beberapa Kali Setahun',
-      2: 'Sekali Sebulan',
-      3: 'Beberapa Kali Sebulan',
-      4: 'Sekali Seminggu',
-      5: 'Beberapa Kali Seminggu',
-      6: 'Sekali Sehari',
-      7: 'Beberapa Kali Sehari',
-      8: 'Setiap Beberapa Jam',
-      9: 'Hampir Terus Menerus',
-      10: 'Terus Menerus'
-    };
-  }
-
-  // SKALA NYERI/SAKIT (0-10)
+  // SKALA NYERI/SAKIT (0-10) dengan rentang
   if (lowerQuestion.includes('nyeri') || 
       lowerQuestion.includes('sakit') || 
       lowerQuestion.includes('rasa tidak nyaman') ||
-      lowerQuestion.includes('ketidaknyamanan')) {
+      lowerQuestion.includes('ketidaknyamanan') ||
+      lowerQuestion.includes('nyeri') ||
+      lowerQuestion.includes('sakit')) {
     return {
       0: 'Tidak Nyeri',
-      1: 'Sangat Ringan',
-      2: 'Ringan',
-      3: 'Agak Ringan',
-      4: 'Sedang Ringan',
-      5: 'Sedang',
-      6: 'Agak Berat',
-      7: 'Berat',
-      8: 'Sangat Berat',
-      9: 'Sangat Sangat Berat',
-      10: 'Nyeri Tak Tertahankan'
+      1: 'Nyeri Ringan',
+      2: 'Nyeri Ringan', 
+      3: 'Nyeri Ringan',
+      4: 'Nyeri Sedang',
+      5: 'Nyeri Sedang',
+      6: 'Nyeri Sedang',
+      7: 'Nyeri Berat',
+      8: 'Nyeri Berat',
+      9: 'Nyeri Berat',
+      10: 'Nyeri Sangat Berat'
     };
   }
 
-  // SKALA SESAK NAPAS
+  // SKALA SESAK NAPAS dengan rentang
   if (lowerQuestion.includes('sesak') || 
       lowerQuestion.includes('napas') || 
       lowerQuestion.includes('pernapasan') ||
       lowerQuestion.includes('bernapas')) {
     return {
       0: 'Tidak Sesak',
-      1: 'Sangat Ringan (hanya saat aktivitas berat)',
-      2: 'Ringan (saat naik tangga 2 lantai)',
-      3: 'Agak Ringan (saat berjalan cepat)',
-      4: 'Sedang (saat berjalan biasa)',
-      5: 'Agak Berat (saat berjalan perlahan)',
-      6: 'Berat (saat berbicara)',
-      7: 'Sangat Berat (saat istirahat ringan)',
-      8: 'Parah (butuh bantuan oksigen)',
-      9: 'Sangat Parah (kesulitan bernapas)',
-      10: 'Kritis (gagal napas)'
+      1: 'Sesak Ringan',
+      2: 'Sesak Ringan',
+      3: 'Sesak Ringan',
+      4: 'Sesak Sedang',
+      5: 'Sesak Sedang', 
+      6: 'Sesak Sedang',
+      7: 'Sesak Berat',
+      8: 'Sesak Berat',
+      9: 'Sesak Berat',
+      10: 'Sesak Sangat Berat'
     };
   }
 
-  // SKALA BATUK
+  // SKALA BATUK dengan rentang
   if (lowerQuestion.includes('batuk')) {
     return {
       0: 'Tidak Batuk',
-      1: 'Sangat Jarang (1-2x/minggu)',
-      2: 'Jarang (3-4x/minggu)',
-      3: 'Kadang-kadang (1x/hari)',
-      4: 'Sering (2-3x/hari)',
-      5: 'Cukup Sering (4-6x/hari)',
-      6: 'Sering Sekali (setiap beberapa jam)',
-      7: 'Hampir Terus Menerus',
-      8: 'Batuk Berat mengganggu tidur',
-      9: 'Batuk Sangat Berat',
-      10: 'Batuk Tak Terkontrol'
+      1: 'Batuk Ringan',
+      2: 'Batuk Ringan',
+      3: 'Batuk Ringan',
+      4: 'Batuk Sedang',
+      5: 'Batuk Sedang',
+      6: 'Batuk Sedang',
+      7: 'Batuk Berat',
+      8: 'Batuk Berat',
+      9: 'Batuk Berat',
+      10: 'Batuk Sangat Berat'
     };
   }
 
-  // SKALA JANTUNG/DADA
+  // SKALA JANTUNG/DADA dengan rentang
   if (lowerQuestion.includes('jantung') || 
       lowerQuestion.includes('dada') || 
       lowerQuestion.includes('palpitasi') ||
       lowerQuestion.includes('berdebar')) {
     return {
-      0: 'Tidak Ada Keluhan',
-      1: 'Sangat Ringan (jarang sekali)',
-      2: 'Ringan (beberapa kali setahun)',
-      3: 'Agak Ringan (sekali sebulan)',
-      4: 'Sedang (beberapa kali sebulan)',
-      5: 'Cukup Mengganggu (sekali seminggu)',
-      6: 'Mengganggu (beberapa kali seminggu)',
-      7: 'Sangat Mengganggu (setiap hari)',
-      8: 'Berat (mengganggu aktivitas)',
-      9: 'Sangat Berat (mengganggu tidur)',
-      10: 'Kritis (butuh penanganan darurat)'
+      0: 'Tidak Ada',
+      1: 'Ringan',
+      2: 'Ringan',
+      3: 'Ringan',
+      4: 'Sedang',
+      5: 'Sedang',
+      6: 'Sedang',
+      7: 'Berat',
+      8: 'Berat',
+      9: 'Berat',
+      10: 'Sangat Berat'
     };
   }
 
-  // SKALA PENCERNAAN
+  // SKALA PENCERNAAN dengan rentang
   if (lowerQuestion.includes('perut') || 
       lowerQuestion.includes('lambung') || 
       lowerQuestion.includes('mual') ||
@@ -312,106 +293,95 @@ const getRatingLabels = (questionText, questionType = 'default') => {
       lowerQuestion.includes('diare') ||
       lowerQuestion.includes('sembelit')) {
     return {
-      0: 'Tidak Ada Keluhan',
-      1: 'Sangat Ringan (hampir tidak terasa)',
-      2: 'Ringan (tidak mengganggu)',
-      3: 'Agak Ringan (sedikit mengganggu)',
-      4: 'Sedang (mengganggu ringan)',
-      5: 'Cukup Mengganggu (perlu istirahat)',
-      6: 'Mengganggu (mengurangi aktivitas)',
-      7: 'Sangat Mengganggu (aktivitas terbatas)',
-      8: 'Berat (butuh pengobatan)',
-      9: 'Sangat Berat (butuh perhatian medis)',
-      10: 'Kritis (butuh penanganan darurat)'
+      0: 'Tidak Ada',
+      1: 'Ringan',
+      2: 'Ringan',
+      3: 'Ringan',
+      4: 'Sedang',
+      5: 'Sedang',
+      6: 'Sedang',
+      7: 'Berat',
+      8: 'Berat',
+      9: 'Berat',
+      10: 'Sangat Berat'
     };
   }
 
-  // SKALA TIDUR
+  // SKALA TIDUR dengan rentang
   if (lowerQuestion.includes('tidur') || 
       lowerQuestion.includes('insomnia') || 
       lowerQuestion.includes('kantuk') ||
       lowerQuestion.includes('mengantuk')) {
     return {
-      0: 'Tidur Sangat Nyenyak',
-      1: 'Tidur Nyenyak',
-      2: 'Tidur Cukup Baik',
-      3: 'Tidur Agak Terganggu',
-      4: 'Tidur Terganggu Ringan',
-      5: 'Tidur Sedang Terganggu',
-      6: 'Sulit Tidur Beberapa Kali',
-      7: 'Sulit Tidur Setiap Malam',
-      8: 'Hampir Tidak Tidur',
-      9: 'Tidur Sangat Buruk',
-      10: 'Tidak Tidur Sama Sekali'
+      0: 'Tidak Ada Gangguan',
+      1: 'Gangguan Ringan',
+      2: 'Gangguan Ringan',
+      3: 'Gangguan Ringan',
+      4: 'Gangguan Sedang',
+      5: 'Gangguan Sedang',
+      6: 'Gangguan Sedang',
+      7: 'Gangguan Berat',
+      8: 'Gangguan Berat',
+      9: 'Gangguan Berat',
+      10: 'Gangguan Sangat Berat'
     };
   }
 
-  // SKALA KEUANGAN/STRES
-  if (lowerQuestion.includes('stres') || 
-      lowerQuestion.includes('cemas') || 
-      lowerQuestion.includes('khawatir') ||
-      lowerQuestion.includes('tekanan')) {
+  // SKALA FREKUENSI dengan rentang
+  if (lowerQuestion.includes('frekuensi') || 
+      lowerQuestion.includes('sering') || 
+      lowerQuestion.includes('berapa kali') ||
+      lowerQuestion.includes('seberapa sering') ||
+      lowerQuestion.includes('kekerapan')) {
     return {
-      0: 'Sangat Tenang',
-      1: 'Tenang',
-      2: 'Sedikit Tenang',
-      3: 'Netral',
-      4: 'Sedikit Cemas',
-      5: 'Cemas Ringan',
-      6: 'Cukup Cemas',
-      7: 'Cemas',
-      8: 'Sangat Cemas',
-      9: 'Sangat Sangat Cemas',
-      10: 'Panik/Stres Berat'
+      0: 'Tidak Pernah',
+      1: 'Jarang',
+      2: 'Jarang',
+      3: 'Jarang',
+      4: 'Kadang-kadang',
+      5: 'Kadang-kadang',
+      6: 'Kadang-kadang',
+      7: 'Sering',
+      8: 'Sering',
+      9: 'Sering',
+      10: 'Sangat Sering'
     };
   }
 
-  // SKALA KUALITAS HIDUP
-  if (lowerQuestion.includes('puas') || 
-      lowerQuestion.includes('kualitas hidup') || 
-      lowerQuestion.includes('kebahagiaan')) {
-    return {
-      0: 'Sangat Tidak Puas',
-      1: 'Tidak Puas',
-      2: 'Cukup Tidak Puas',
-      3: 'Sedikit Tidak Puas',
-      4: 'Netral',
-      5: 'Sedikit Puas',
-      6: 'Cukup Puas',
-      7: 'Puas',
-      8: 'Sangat Puas',
-      9: 'Sangat Sangat Puas',
-      10: 'Sempurna'
-    };
-  }
-
-  // SKALA UMUM (default)
+  // SKALA UMUM (default) dengan rentang
   return {
-    0: 'Tidak Ada/Sangat Rendah',
-    1: 'Sangat Rendah',
-    2: 'Rendah',
-    3: 'Agak Rendah',
-    4: 'Sedang Rendah',
+    0: 'Tidak Ada',
+    1: 'Ringan',
+    2: 'Ringan',
+    3: 'Ringan',
+    4: 'Sedang',
     5: 'Sedang',
-    6: 'Sedang Tinggi',
-    7: 'Tinggi',
-    8: 'Sangat Tinggi',
-    9: 'Sangat Sangat Tinggi',
-    10: 'Maksimal/Parah'
+    6: 'Sedang',
+    7: 'Berat',
+    8: 'Berat',
+    9: 'Berat',
+    10: 'Sangat Berat'
   };
 };
 
-// Komponen untuk Rating Scale 0-10 dengan keterangan menyesuaikan pertanyaan
+// Komponen untuk Rating Scale 0-10 dengan rentang
 const RatingScaleTable = ({ value, onChange, question, questionNumber }) => {
   const numbers = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
   const ratingLabels = getRatingLabels(question);
   
   const getColorScheme = (number) => {
-    if (number <= 2) return 'green';
-    if (number <= 4) return 'blue';
-    if (number <= 6) return 'yellow';
-    if (number <= 8) return 'orange';
-    return 'red';
+    if (number <= 3) return 'green';    // Ringan
+    if (number <= 6) return 'yellow';   // Sedang
+    if (number <= 9) return 'orange';   // Berat
+    return 'red';                       // Sangat Berat
+  };
+
+  const getRangeLabel = (number) => {
+    if (number === 0) return 'Tidak Ada';
+    if (number >= 1 && number <= 3) return 'Ringan';
+    if (number >= 4 && number <= 6) return 'Sedang';
+    if (number >= 7 && number <= 9) return 'Berat';
+    return 'Sangat Berat';
   };
 
   return (
@@ -441,7 +411,7 @@ const RatingScaleTable = ({ value, onChange, question, questionNumber }) => {
               bg="gray.25"
             >
               <Text fontWeight="medium">Tingkat Skala</Text>
-              <Text fontSize="xs">0 = Terendah, 10 = Tertinggi</Text>
+              <Text fontSize="xs">0 = Tidak Ada, 10 = Sangat Berat</Text>
             </Td>
             {numbers.map(number => (
               <Td key={number} textAlign="center" px={1} py={2}>
@@ -464,7 +434,27 @@ const RatingScaleTable = ({ value, onChange, question, questionNumber }) => {
               </Td>
             ))}
           </Tr>
-          {/* Baris untuk keterangan */}
+          {/* Baris untuk keterangan rentang */}
+          <Tr>
+            <Td 
+              borderRight="1px" 
+              borderColor="gray.200" 
+              fontSize="xs" 
+              color="gray.600"
+              whiteSpace="normal"
+              bg="gray.25"
+            >
+              <Text fontWeight="medium">Rentang</Text>
+            </Td>
+            {numbers.map(number => (
+              <Td key={number} textAlign="center" px={1} py={1}>
+                <Text fontSize="2xs" color="gray.500" noOfLines={1}>
+                  {getRangeLabel(number)}
+                </Text>
+              </Td>
+            ))}
+          </Tr>
+          {/* Baris untuk keterangan detail */}
           <Tr>
             <Td 
               borderRight="1px" 
@@ -487,14 +477,32 @@ const RatingScaleTable = ({ value, onChange, question, questionNumber }) => {
         </Tbody>
       </Table>
       
-      {/* Legend untuk skala */}
+      {/* Legend untuk rentang skala */}
       <Box mt={3} p={3} bg="gray.50" borderRadius="md">
-        <VStack spacing={1} align="start" fontSize="xs">
-          <Text><strong>Keterangan Skala 0-10:</strong></Text>
-          <Text>0: {ratingLabels[0]} | 5: {ratingLabels[5]} | 10: {ratingLabels[10]}</Text>
-          <Text color="gray.500">
-            Pilih angka yang paling sesuai dengan kondisi Anda
-          </Text>
+        <VStack spacing={2} align="start" fontSize="xs">
+          <Text fontWeight="bold">Keterangan Rentang Skala:</Text>
+          <SimpleGrid columns={2} spacing={2} width="100%">
+            <HStack>
+              <Box w="3" h="3" bg="green.500" borderRadius="sm"></Box>
+              <Text>0: Tidak Ada</Text>
+            </HStack>
+            <HStack>
+              <Box w="3" h="3" bg="green.500" borderRadius="sm"></Box>
+              <Text>1-3: Ringan</Text>
+            </HStack>
+            <HStack>
+              <Box w="3" h="3" bg="yellow.500" borderRadius="sm"></Box>
+              <Text>4-6: Sedang</Text>
+            </HStack>
+            <HStack>
+              <Box w="3" h="3" bg="orange.500" borderRadius="sm"></Box>
+              <Text>7-9: Berat</Text>
+            </HStack>
+            <HStack>
+              <Box w="3" h="3" bg="red.500" borderRadius="sm"></Box>
+              <Text>10: Sangat Berat</Text>
+            </HStack>
+          </SimpleGrid>
         </VStack>
       </Box>
     </Box>
@@ -1089,7 +1097,7 @@ function FormContent() {
     });
     
     content += `SKALA PENILAIAN:\n`;
-    content += `Skala 0-10 dengan keterangan menyesuaikan jenis pertanyaan\n\n`;
+    content += `0 = Tidak Ada, 1-3 = Ringan, 4-6 = Sedang, 7-9 = Berat, 10 = Sangat Berat\n\n`;
     
     content += `DISCLAIMER:\n`;
     content += `=================\n`;
@@ -1282,8 +1290,8 @@ function FormContent() {
     yPosition += 15;
 
     const scaleText = [
-      "Skala 0-10 dengan keterangan menyesuaikan jenis pertanyaan",
-      "0 = Terendah/Tidak Ada, 5 = Sedang, 10 = Tertinggi/Parah"
+      "Skala 0-10 dengan sistem rentang:",
+      "0 = Tidak Ada, 1-3 = Ringan, 4-6 = Sedang, 7-9 = Berat, 10 = Sangat Berat"
     ];
 
     scaleText.forEach(text => {
