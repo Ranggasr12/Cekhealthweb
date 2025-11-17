@@ -402,7 +402,7 @@ export default function Home() {
               fontWeight="extrabold"
               lineHeight="1.1"
             >
-              Kesehatan mu
+              Kesehatanmu
             </Heading>
             <Text 
               color="gray.600" 
